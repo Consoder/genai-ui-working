@@ -1,725 +1,1555 @@
-import React, { useRef, useState, useEffect, useCallback, createContext, useContext } from "react";
-import { motion, AnimatePresence, useInView, useMotionValue, useTransform } from "framer-motion";
-import { MessageCircle, Zap, FileText, Link, BarChart, Sparkles, Sun, Moon, ChevronLeft, ChevronRight, Rocket, Database, Server, Terminal, Layers, Code, Users, BadgeCheck } from "lucide-react"; // premium icons
-import clsx from "clsx";
+// 🔁 Force update check - Kartik test comment
+import React, { useState, useEffect, useRef } from "react";
+import {
+  motion,
+  AnimatePresence,
+  useAnimation,
+  useInView,
+  useScroll,
+  useTransform,
+  useSpring
+} from "framer-motion";
 
-/* ==== THEME PROVIDER: ANIMATED/SYSTEM ==== */
-const ThemeContext = createContext();
-function useTheme() { return useContext(ThemeContext); }
-function ThemeProvider({ children }) {
-  const [theme, setTheme] = useState(() =>
-    localStorage.getItem("theme") || (window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light")
-  );
-  useEffect(() => {
-    const root = document.documentElement;
-    root.style.colorScheme = theme;
-    root.classList.add("theme-transition");
-    root.classList.toggle("dark", theme === "dark");
-    setTimeout(() => root.classList.remove("theme-transition"), 350);
-    localStorage.setItem("theme", theme);
-  }, [theme]);
-  useEffect(() => {
-    const mql = window.matchMedia("(prefers-color-scheme: dark)");
-    const sync = () => !localStorage.getItem("theme") && setTheme(mql.matches ? "dark" : "light");
-    mql.addEventListener("change", sync);
-    return () => mql.removeEventListener("change", sync);
-  }, []);
-  return <ThemeContext.Provider value={{ theme, setTheme }}>{children}</ThemeContext.Provider>;
+
+// -------- Font Injection Once --------
+if (
+  typeof window !== 'undefined' &&
+  !document.getElementById('font-awd')
+) {
+  const style = document.createElement('style');
+  style.id = 'font-awd';
+  style.innerHTML = `
+    @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Inter:wght@400;700&family=JetBrains+Mono&display=swap');
+    html, body { font-family: 'Inter', 'Space Grotesk', 'JetBrains Mono', ui-sans-serif; }
+  `;
+  document.head.appendChild(style);
 }
-function DarkModeToggle() {
-  const { theme, setTheme } = useTheme();
+
+// -------- Toast/Error --------
+function Toast({ message, onDismiss }) {
   return (
-    <motion.button
-      aria-label="Toggle Dark Mode"
-      onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
-      whileTap={{ scale: 0.92 }}
-      whileHover={{ scale: 1.13, filter: "brightness(1.15)" }}
-      className="fixed top-4 right-4 z-[1101] rounded-xl p-2 border border-accent-blue bg-glass-light dark:bg-night text-night dark:text-paper focus:ring-2 focus:ring-accent-blue"
-      style={{ backdropFilter: "blur(8px)", transition: "background 0.3s, color 0.3s, box-shadow 0.2s" }}
+    <motion.div
+      initial={{ opacity: 0, y: 28 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, y: 32 }}
+      className="fixed bottom-8 left-1/2 z-[9999] -translate-x-1/2 px-5 py-3 bg-[#181541] text-white rounded-xl shadow-lg font-bold flex items-center gap-2"
+      role="alert"
+      aria-live="assertive"
     >
-      {theme === "dark" ? <Moon className="w-6 h-6" /> : <Sun className="w-6 h-6" />}
-    </motion.button>
-  );
-}
-
-/* ========== COMPONENTIZED BUTTON/INPUT/CARD ========== */
-function Button({ children, icon, variant = "primary", ...rest }) {
-  return (
-    <motion.button
-      type="button"
-      whileTap={{ scale: 0.94 }}
-      whileHover={{ scale: 1.07 }}
-      className={clsx(
-        "inline-flex gap-2 items-center justify-center px-6 py-3 rounded-pill font-bold transition-all duration-250 shadow-feature text-lg focus:outline-none focus:ring-2 focus:ring-accent-blue",
-        variant === "primary"
-          ? "bg-accent-blue text-white hover:bg-accent-gold active:bg-accent-pink"
-          : "bg-paper text-night dark:bg-night dark:text-paper border border-glass-dark hover:bg-glass-light"
-      )}
-      {...rest}
-    >{icon && <span>{icon}</span>}{children}</motion.button>
-  );
-}
-function Input({ ...props }) {
-  return (
-    <input
-      {...props}
-      className="px-4 py-3 rounded-xl border border-glass-dark bg-paper dark:bg-night text-night dark:text-paper w-full focus:ring-2 focus:ring-accent-blue transition placeholder:text-gray-400 dark:placeholder:text-gray-600"
-    />
-  );
-}
-function Card({ children, className }) {
-  return (
-    <div className={clsx("p-8 rounded-glass shadow-glass-morph bg-white dark:bg-night transition-colors duration-300 border border-glass-light", className)}>
-      {children}
-    </div>
-  );
-}
-
-/* ==== FOG/CURSOR - pointer devices only ==== */
-function FogOverlays() {
-  const [show, setShow] = useState(false);
-  useEffect(() => { setShow(window.matchMedia("(pointer: fine)").matches); }, []);
-  if (!show) return null;
-  return (
-    <>
-      <motion.div className="fixed top-[-15vh] left-[5vw] z-0 rounded-full pointer-events-none"
-        style={{ width: "400px", height: "300px", background: "radial-gradient(ellipse at center, #d1c3fc44 0%, #75e4b633 70%, transparent 95%)" }}
-        animate={{ x: [0, 80, -60, 0], y: [0, 20, -20, 0] }} transition={{ duration: 19, repeat: Infinity, ease: [0.56,0,0.38,1] }} />
-      <motion.div className="fixed bottom-[-60px] right-[-50px] z-0 rounded-full pointer-events-none"
-        style={{ width: "400px", height: "195px", background: "radial-gradient(ellipse at center, #5e8efd44 0%, #fa92f744 60%, transparent 95%)" }}
-        animate={{ x: [0, -80, 50, 0], y: [0, -20, 30, 0] }} transition={{ duration: 27, repeat: Infinity, ease: [0.86,0,0.38,1] }} />
-    </>
-  );
-}
-function CustomCursor() {
-  const [show, setShow] = useState(false);
-  useEffect(() => { setShow(window.matchMedia("(pointer: fine)").matches); }, []);
-  const dotRef = useRef();
-  useEffect(() => {
-    if (!show) return;
-    const move = (e) => { if (dotRef.current) dotRef.current.style.transform = `translate(${e.clientX}px,${e.clientY}px)`; };
-    window.addEventListener("pointermove", move);
-    return () => window.removeEventListener("pointermove", move);
-  }, [show]);
-  if (!show) return null;
-  return (
-    <motion.div ref={dotRef}
-      className="fixed z-[1100] w-7 h-7 pointer-events-none -translate-x-1/2 -translate-y-1/2"
-      style={{ filter: "blur(3.7px)", willChange: "transform" }}
-      initial={{ scale: 0.9 }} animate={{ scale: 1 }} whileTap={{ scale: 0.7 }}>
-      <div className="w-7 h-7 rounded-full bg-gradient-to-br from-accent-blue via-accent-gold to-accent-pink opacity-30" />
+      <span>⚠️</span> {message}
+      <button className="ml-3 text-[#db5afb] underline" onClick={onDismiss} aria-label="Dismiss error">&times;</button>
     </motion.div>
   );
 }
 
-/* ====== APP DATA: CUSTOMIZED ====== */
-const features = [
-  { icon: <MessageCircle strokeWidth={2.3} />, title: "Chat", desc: "Conversational AI with workflow context.", detail: "Switch between support, dev, and creative personas, then automate ops via chat." },
-  { icon: <Zap strokeWidth={2.3} />, title: "Auto-Actions", desc: "Automate & integrate your stack.", detail: "Connect and trigger automations, APIs, and 3rd party tools from anywhere in chat." },
-  { icon: <FileText strokeWidth={2.3} />, title: "Docs Q&A", desc: "Upload and deeply query docs.", detail: "Drop in any PDF/CSV. Instantly search, summarize, and unlock answers." },
-  { icon: <Link strokeWidth={2.3} />, title: "Live Integrations", desc: "Notion, Slack, Email, DB, etc.", detail: "One-click connect with your business tools for truly context-aware AI." },
-  { icon: <BarChart strokeWidth={2.3} />, title: "Prompt Analytics", desc: "Visualize usage/saves.", detail: "Monitor prompts, see trends, and optimize workflows for every team." }
-];
-const techStack = [
-  { icon: <Rocket />, color: "#5e8efd", name: "React", desc: "Enterprise UI", details: "Hooks, state, animation—build futureproof SaaS at scale.", badge: "UI", link: "https://react.dev" },
-  { icon: <Sparkles />, color: "#04b892", name: "OpenAI", desc: "Next-gen LLMs", details: "GPT-4, fine-tuning, vector search.", badge: "AI", link: "https://openai.com" },
-  { icon: <Terminal />, color: "#387eb8", name: "Python", desc: "ML backend", details: "Data, orchestration, workflows.", badge: "Back", link: "https://python.org" },
-  { icon: <Server />, color: "#009688", name: "FastAPI", desc: "Async REST", details: "Type-safe, blazing fast APIs.", badge: "API", link: "https://fastapi.tiangolo.com" },
-  { icon: <Layers />, color: "#db5afb", name: "TailwindCSS", desc: "Smart CSS", details: "Atomic, scalable styles—faster design.", badge: "Style", link: "https://tailwindcss.com" },
-  { icon: <Database />, color: "#0064a5", name: "Postgres", desc: "Vector DB", details: "RDBMS, AI-native, scalable ops.", badge: "Data", link: "https://postgresql.org" }
-];
-const testimonials = [
-  { name: "Tarah L.", org: "ProductOps Partner", img: "https://randomuser.me/api/portraits/women/54.jpg", text: "We replaced two SaaS tools and saved 5h/week per team. The chat AI agent is shockingly helpful." },
-  { name: "Anil Patel", org: "ArcOne Cloud", img: "https://randomuser.me/api/portraits/men/48.jpg", text: "Most 'AI dashboards' are vapor. This actually brought business ROI—integrations work, and the UI is 10/10." },
-  { name: "Sofia Zhang", org: "Fathomly", img: "https://randomuser.me/api/portraits/women/22.jpg", text: "The onboarding and prompt-assist flow feels like magic. Best design and dev handoff I’ve seen in years." }
-];
-
-/* ========== NAVBAR ========== */
-function Navbar({ user }) {
-  const [mobile, setMobile] = useState(false);
-  const navLinks = [
-    { href: "#hero", label: "Home" },
-    { href: "#demo", label: "Live Demo" },
-    { href: "#features", label: "Features" },
-    { href: "#stack", label: "Tech Stack" },
-    { href: "#testimonials", label: "Clients" },
-    { href: "#contact", label: "Contact" }
-  ];
-  const [active, setActive] = useState(navLinks[0].href);
-  // Animated nav underline
+// -------- Animated Cursor --------
+const useCursor = () => {
+  const cursor = useRef(null);
   useEffect(() => {
-    const onScroll = () => {
-      let found = navLinks[0].href;
-      for (const l of navLinks) {
-        const el = document.querySelector(l.href);
-        if (!el) continue;
-        const rect = el.getBoundingClientRect();
-        if (rect.top < 90 && rect.bottom > 40) { found = l.href; break; }
-      }
-      setActive(found);
+    if (!cursor.current) return;
+    const onMove = (e) => {
+      cursor.current.style.left = `${e.clientX - 20}px`;
+      cursor.current.style.top = `${e.clientY - 20}px`;
     };
-    window.addEventListener("scroll", onScroll, { passive: true });
-    return () => window.removeEventListener("scroll", onScroll);
+    window.addEventListener('mousemove', onMove);
+    return () => window.removeEventListener('mousemove', onMove);
   }, []);
-  useEffect(() => {
-    if (mobile) {
-      document.body.style.overflow = "hidden";
-      const keyClose = e => e.key === "Escape" && setMobile(false);
-      window.addEventListener("keydown", keyClose);
-      return () => { document.body.style.overflow = ""; window.removeEventListener("keydown", keyClose);}
-    }
-  }, [mobile]);
+  return cursor;
+};
+function GelCursor() {
+  const ref = useCursor();
   return (
-    <nav className="fixed z-50 top-0 left-0 w-full bg-paper/90 dark:bg-night/95 backdrop-blur-xl border-b border-glass-dark shadow-xl">
-      <div className="flex items-center justify-between max-w-7xl mx-auto py-4 px-5">
-        <span className="font-grotesk text-2xl font-heavy text-accent-blue dark:text-accent-gold tracking-tight flex gap-2 items-center">
-          <BadgeCheck className="w-7 h-7 text-accent-blue dark:text-accent-gold" />{user ? `Welcome, ${user.split(" ")[0]}` : "NextGen SaaS"}
-        </span>
-        <div className="hidden md:flex gap-8 relative">
-          {navLinks.map((l) => (
-            <motion.a key={l.href} href={l.href}
-              className={clsx("text-night/75 dark:text-paper/85 font-bold px-2 py-0.5 rounded transition relative focus:outline-none",
-                active === l.href && "text-accent-blue dark:text-accent-gold font-extrabold")}
-              aria-current={active === l.href ? "page" : undefined}
-              tabIndex={0}
-              whileHover={{ scale: 1.07 }}>
-              {l.label}
-              {active === l.href && (
-                <motion.div layoutId="nav-underline"
-                  className="absolute h-1 rounded-full bg-accent-blue dark:bg-accent-gold left-0 right-0 bottom-0"
-                  transition={{ type: "spring", stiffness: 600, damping: 30 }} />
-              )}
-            </motion.a>
-          ))}
-        </div>
-        <Button icon={mobile ? <>&times;</> : <Layers />} variant="secondary"
-          className="md:hidden p-2 rounded-full bg-glass-light dark:bg-night border-0 text-lg" onClick={() => setMobile(v=>!v)}>
-          <span className="sr-only">{mobile ? "Close menu" : "Open menu"}</span>
-        </Button>
-      </div>
-      <AnimatePresence>
-        {mobile && (
-          <motion.div
-            initial={{ opacity: 0, y: -38 }} animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -30 }}
-            className="fixed flex flex-col items-center justify-center inset-0 z-50 bg-night/92 dark:bg-paper/96 backdrop-blur-2xl"
-            onClick={() => setMobile(false)}
-          >
-            {navLinks.map((l) => (
-              <a key={l.href} href={l.href}
-                tabIndex={0}
-                className={"text-2xl font-heavy mb-8 focus:outline-none "+ (active === l.href ? "underline text-accent-blue dark:text-accent-gold" : "")}
-                onClick={() => setMobile(false)}>{l.label}</a>
-            ))}
-          </motion.div>
-        )}
-      </AnimatePresence>
-    </nav>
-  );
-}
-
-/* ====== HERO ====== */
-function HeroSection() {
-  const ref = useRef();
-  const inView = useInView(ref, { once: true });
-  return (
-    <section ref={ref} id="hero" className="relative flex flex-col items-center justify-center pt-32 pb-20 min-h-[80vh] bg-mesh-gradient dark:bg-gradient-to-b dark:from-night dark:to-accent-blue/10 overflow-hidden">
-      <motion.div
-        className="absolute inset-0 z-0"
-        initial={{ opacity: 0 }}
-        animate={inView ? { opacity: 1 } : { opacity: 0 }}
-        transition={{ duration: 1.2, ease: [0.45,0,0.36,1] }}
-        style={{ background: "radial-gradient(ellipse at 70% 40%, #db5afb33, #75e4b622)" }}
-      />
-      <motion.div
-        className="relative z-10 text-center"
-        initial={{ opacity: 0, y: 70 }}
-        animate={inView ? { opacity: 1, y: 0 } : { opacity: 0 }}
-        transition={{ duration: 1.17, type: "spring", stiffness: 260, damping: 28 }}
-      >
-        <motion.h1
-          className="text-5xl md:text-7xl font-grotesk font-heavy bg-gradient-to-br from-accent-blue via-accent-pink to-accent-gold bg-clip-text text-transparent drop-shadow-hero mb-7 leading-tight"
-        >AI-Powered SaaS for Real Teams</motion.h1>
-        <motion.p className="max-w-2xl mx-auto text-2xl md:text-3xl text-night/80 dark:text-paper/80 mt-4 mb-8 font-inter">
-          <span className="font-grotesk font-black text-accent-blue dark:text-accent-gold">Unlock productivity</span> with custom AI chat, workflow automations, document q&a, and instant integrations. <span className="font-heavy text-accent-pink">Modern. Secure. Yours.</span>
-        </motion.p>
-        <Button icon={<Sparkles />} href="#demo" variant="primary">Try It Live</Button>
-      </motion.div>
-      <svg width="100%" height="80" viewBox="0 0 1440 80" className="absolute bottom-0 left-0 dark:hidden pointer-events-none">
-        <path fill="#f2f7fb" d="M0,64 Q720,0 1440,64 V80 H0 Z" />
-      </svg>
-    </section>
-  );
-}
-
-/* ====== FEATURES ====== */
-function FeaturesSection() {
-  const [idx, setIdx] = useState(0);
-  return (
-    <section id="features" className="container py-section flex flex-col md:flex-row gap-10 items-start justify-between">
-      <div className="flex flex-col gap-4 w-full md:w-[370px]">
-        {features.map((f, i) => (
-          <motion.button
-            key={f.title}
-            className={clsx(
-              "w-full text-left px-7 py-6 rounded-glass border-2 border-glass-dark dark:border-glass-light shadow-feature bg-glass-light dark:bg-night/80 font-grotesk text-lg font-bold transition relative flex items-center gap-5 focus:outline-none focus-visible:ring-2 ring-accent-blue",
-              idx === i ? "ring-2 ring-accent-blue dark:ring-accent-gold scale-105 bg-accent-blue/10 dark:bg-accent-gold/15 text-accent-blue dark:text-accent-gold z-20" : "hover:ring-1 hover:ring-accent-pink hover:z-20"
-            )}
-            aria-pressed={idx === i}
-            tabIndex={0}
-            onClick={() => setIdx(i)}
-            whileHover={{ scale: idx === i ? 1.13 : 1.05, x: idx===i ? 4:2 }}
-            whileTap={{ scale: 0.97, x:0 }}
-          >
-            <span className="w-8 h-8 flex items-center justify-center text-accent-gold dark:text-accent-blue">{f.icon}</span>
-            <span className="flex-1">{f.title}</span>
-            {idx === i && (
-              <motion.div className="absolute right-2 top-2 drop-shadow" initial={{ scale:0.7}} animate={{scale:1.1}}><BadgeCheck /></motion.div>
-            )}
-          </motion.button>
-        ))}
-      </div>
-      <AnimatePresence mode="wait">
-        <motion.div className="flex-1 rounded-glass border-2 border-accent-blue/10 dark:border-accent-gold/10 bg-mesh-gradient/40 dark:bg-accent-blue/15 shadow-2xl p-10 min-h-[260px] ml-0 md:ml-12 mt-10 md:mt-0 flex flex-col justify-center"
-          key={idx}
-          initial={{ opacity: 0, x: 65 }} animate={{ opacity: 1, x: 0, transition: { type: "spring", duration: 0.52, bounce: 0.33 } }} exit={{ opacity: 0, x: -54 }}>
-          <span className="w-8 h-8 mb-2 text-accent-blue dark:text-accent-gold">{features[idx].icon}</span>
-          <h4 className="text-3xl font-grotesk font-heavy mb-3 mt-2">{features[idx].title}</h4>
-          <p className="mb-4 text-xl">{features[idx].detail}</p>
-        </motion.div>
-      </AnimatePresence>
-    </section>
-  );
-}
-
-/* ==== TECH STACK CAROUSEL: premium popover, a11y, momentum ==== */
-// "Momentum" scroll rubberband is demoed with CSS-only for demo—see notes for pro lib
-function TechStackSection() {
-  const carousel = useRef();
-  const [canLeft, setCanLeft] = useState(false), [canRight, setCanRight] = useState(true);
-  const [focusIdx, setFocusIdx] = useState(0);
-  const [arrowShown, setArrowShown] = useState(false);
-  const cardRefs = useRef([]);
-  // Only show arrows if needed
-  const updateArrowState = useCallback(() => {
-    const node = carousel.current;
-    if (!node) return;
-    setCanLeft(node.scrollLeft > 5);
-    setCanRight(node.scrollLeft + node.offsetWidth < node.scrollWidth - 5);
-    setArrowShown(node.scrollWidth > node.clientWidth + 1);
-  }, []);
-  function scrollTo(idx) {
-    const card = cardRefs.current[idx]; if (card) { card.scrollIntoView({ behavior: "smooth", inline: "center", block: "nearest" }); card.focus(); setFocusIdx(idx); }
-  }
-  const scrollLeft = useCallback(() => { if (focusIdx > 0) scrollTo(focusIdx - 1); }, [focusIdx]);
-  const scrollRight = useCallback(() => { if (focusIdx < techStack.length - 1) scrollTo(focusIdx + 1); }, [focusIdx]);
-  useEffect(() => {
-    updateArrowState();
-    const node = carousel.current;
-    if (!node) return;
-    node.addEventListener("scroll", updateArrowState, { passive: true });
-    window.addEventListener("resize", updateArrowState);
-    return () => {
-      node.removeEventListener("scroll", updateArrowState);
-      window.removeEventListener("resize", updateArrowState);
-    };
-  }, [updateArrowState]);
-  useEffect(() => { scrollTo(focusIdx); }, [focusIdx]);
-  useEffect(() => {
-    const node = carousel.current; if (!node) return;
-    const key = e => {
-      if (e.key === "ArrowLeft") { e.preventDefault(); scrollLeft(); }
-      else if (e.key === "ArrowRight") { e.preventDefault(); scrollRight(); }
-    };
-    node.addEventListener("keydown", key);
-    return () => node.removeEventListener("keydown", key);
-  }, [scrollLeft, scrollRight]);
-  // Only show arrows on hover/focus or scrollable
-  const [arrowHover, setArrowHover] = useState(false);
-  return (
-    <section id="stack" className="relative py-section w-full flex flex-col items-center bg-night dark:bg-paper/10 rounded-xl select-none">
-      <h2 className="text-3xl md:text-4xl font-heavy mb-7 text-accent-green text-center">
-        Our Tech <span className="text-accent-blue dark:text-accent-gold">Stack</span>
-      </h2>
-      {arrowShown && <>
-        <div className="hidden md:flex absolute left-0 top-1/2 -translate-y-1/2 z-20"
-          onMouseEnter={() => setArrowHover(true)} onMouseLeave={() => setArrowHover(false)}>
-          <motion.button aria-label="Scroll left" onClick={scrollLeft}
-            className={clsx(
-              "mx-2 size-10 flex items-center justify-center rounded-full border-2 shadow-xl font-bold transition",
-              canLeft && arrowHover ? "bg-accent-gold/90 text-white scale-110" : canLeft ? "bg-paper/70 dark:bg-night/80 text-accent-blue dark:text-accent-gold" : "bg-paper/40 dark:bg-night/50 text-neutral-400 cursor-not-allowed opacity-35 pointer-events-none"
-            )}
-            tabIndex={canLeft ? 0 : -1} type="button" disabled={!canLeft}
-            initial={false} animate={{ opacity: (arrowHover || canLeft) ? 1 : 0.25}}>
-            <ChevronLeft />
-          </motion.button>
-        </div>
-        <div className="hidden md:flex absolute right-0 top-1/2 -translate-y-1/2 z-20"
-          onMouseEnter={() => setArrowHover(true)} onMouseLeave={() => setArrowHover(false)}>
-          <motion.button aria-label="Scroll right" onClick={scrollRight}
-            className={clsx(
-              "mx-2 size-10 flex items-center justify-center rounded-full border-2 shadow-xl font-bold transition",
-              canRight && arrowHover ? "bg-accent-gold/90 text-white scale-110" : canRight ? "bg-paper/70 dark:bg-night/80 text-accent-blue dark:text-accent-gold" : "bg-paper/40 dark:bg-night/50 text-neutral-400 cursor-not-allowed opacity-35 pointer-events-none"
-            )}
-            tabIndex={canRight ? 0 : -1} type="button" disabled={!canRight}
-            initial={false} animate={{ opacity: (arrowHover||canRight) ? 1 : 0.25}}>
-            <ChevronRight />
-          </motion.button>
-        </div>
-      </>}
-      <div
-        ref={carousel}
-        role="region"
-        aria-label="Technology carousel"
-        className="no-scrollbar flex gap-8 md:gap-12 pb-8 overflow-x-auto snap-x snap-mandatory w-full px-4 md:px-16 lg:px-36 focus:outline-none"
-        tabIndex={0}
-        style={{ WebkitOverflowScrolling: "touch", scrollBehavior: "smooth", overscrollBehaviorX: "contain" }}
-        onFocus={() => setArrowHover(true)} onBlur={() => setArrowHover(false)}
-      >
-        {techStack.map((t, i) => (
-          <TechCard
-            key={t.name}
-            tech={t}
-            idx={i}
-            ref={el => (cardRefs.current[i] = el)}
-            active={focusIdx === i}
-            setFocusIdx={setFocusIdx}
-          />
-        ))}
-      </div>
-      <style>{`
-        .theme-transition { transition: background 0.4s, color 0.4s, border 0.2s, box-shadow .2s; }
-        .no-scrollbar::-webkit-scrollbar { display: none }
-        .no-scrollbar { scrollbar-width: none; -ms-overflow-style: none; }
-      `}</style>
-    </section>
-  );
-}
-const TechCard = React.forwardRef(function TechCard({ tech, idx, active, setFocusIdx }, ref) {
-  const x = useMotionValue(0), y = useMotionValue(0);
-  const rotateX = useTransform(y, [-60, 60], [11, -11]);
-  const rotateY = useTransform(x, [-60, 60], [-10, 10]);
-  const [open, setOpen] = useState(false);
-  // Clamp popover to view, pointer
-  const [popoverPos, setPopoverPos] = useState({ shiftX: 0, pointerX: "50%" });
-  useEffect(() => {
-    if (!open || !ref?.current) return;
-    const r = ref.current.getBoundingClientRect();
-    const popW = 285, screenP = 22;
-    let shiftX=0, pointerX="50%";
-    const left = r.left + r.width / 2 - popW/2, right = r.left + r.width / 2 + popW/2;
-    if(left<screenP){ shiftX=screenP-left; pointerX=`${Math.max(((r.width/2)-shiftX)/popW,0.08)*100}%`}
-    if(right>window.innerWidth-screenP){ shiftX-=(right-(window.innerWidth-screenP)); pointerX=`${Math.min((((r.width/2)+shiftX)/popW),0.92)*100}%`}
-    setPopoverPos({ shiftX, pointerX });
-  }, [open, ref]);
-  useEffect(() => { if (active && ref?.current) ref.current.focus(); }, [active, ref]);
-  useEffect(() => {
-    const el = ref?.current;
-    if (!el) return;
-    const handleMove = (e) => {
-      const r = el.getBoundingClientRect(), isTouch = !!e.touches;
-      const clientX = isTouch ? e.touches[0].clientX : e.clientX, clientY = isTouch ? e.touches[0].clientY : e.clientY;
-      x.set(clientX - r.left - r.width / 2); y.set(clientY - r.top - r.height / 2);
-    };
-    const handleEnter = () => { setOpen(true); setFocusIdx(idx); };
-    const handleLeave = () => { setOpen(false); x.set(0); y.set(0); };
-    const handleClickTouch = (e) => { e.preventDefault(); setOpen(v => !v); setFocusIdx(idx); };
-    el.addEventListener("mousemove", handleMove); el.addEventListener("mouseenter", handleEnter); el.addEventListener("mouseleave", handleLeave);
-    el.addEventListener("touchmove", handleMove); el.addEventListener("touchstart", handleClickTouch);
-    return () => { el.removeEventListener("mousemove", handleMove); el.removeEventListener("mouseenter", handleEnter); el.removeEventListener("mouseleave", handleLeave);
-      el.removeEventListener("touchmove", handleMove); el.removeEventListener("touchstart", handleClickTouch); };
-  }, [x, y, idx, setFocusIdx, ref]);
-  // A11y: aria-modal, auto-focus, keyboard trap if desired (see notes)
-  return (
-    <motion.a
+    <div
       ref={ref}
-      href={tech.link}
-      target="_blank" rel="noopener noreferrer"
-      role="option"
-      aria-selected={active}
-      aria-describedby={`tech-${tech.name.replace(/\s+/g, '').toLowerCase()}-desc`}
-      tabIndex={0}
-      className={clsx(
-        "snap-center outline-none bg-gradient-to-br cursor-pointer select-none",
-        "from-white/85 to-neutral-200 dark:from-night/95 dark:to-paper/10",
-        "rounded-[2.25em] shadow-xl border border-neutral-200 dark:border-neutral-700",
-        "flex flex-col items-center justify-start px-6 py-7 min-w-[228px] max-w-[260px]",
-        "relative overflow-visible transition will-change-transform hover:shadow-2xl duration-200",
-        active && "ring-2 ring-accent-blue dark:ring-accent-gold"
-      )}
-      style={{
-        rotateX, rotateY, zIndex: open || active ? 99 : idx, transformStyle: "preserve-3d",
-        boxShadow: open || active ? `0 8px 36px 1px ${tech.color}44, 0 3px 18px #0002` : "0 2px 14px #0001"
-      }}
-      onFocus={() => { setOpen(true); setFocusIdx(idx); }}
-      onBlur={() => setOpen(false)}
+      className="fixed pointer-events-none z-[99] w-11 h-11"
+      style={{ mixBlendMode: 'lighten' }}
+      aria-hidden="true"
     >
-      <span className="absolute left-3 top-2 z-20">
-        <span className="inline-block text-xs px-2 py-0.5 rounded-full font-bold bg-accent-gold/90 text-night dark:bg-accent-blue/90 dark:text-gold uppercase tracking-wide shadow-sm select-none">{tech.badge}</span>
-      </span>
-      <motion.div className="absolute top-[14px] left-1/2 -translate-x-1/2 pointer-events-none z-0"
-        animate={{ opacity: open ? 0.36 : 0.16, scale: open ? 1.11 : 0.93 }} transition={{ duration: 0.21 }}
-        style={{ width: 68, height: 68, borderRadius: 38, background: `${tech.color}16`, boxShadow: `0 0 32px 10px ${tech.color}46`, filter: "blur(8px)" }} />
-      <span className="w-12 h-12 flex items-center justify-center text-accent-blue dark:text-accent-gold">{tech.icon}</span>
-      <span className="font-heavy text-md text-accent-blue dark:text-accent-gold z-10 mt-4 mb-1 text-center">{tech.name}</span>
-      <span id={`tech-${tech.name.replace(/\s+/g, '').toLowerCase()}-desc`} className="block opacity-80 text-xs text-paper/80 dark:text-paper/60 text-center">{tech.desc}</span>
-      <motion.div
-        className={clsx(
-          "absolute w-[285px] max-w-[94vw] px-4 py-3 bg-white/98 dark:bg-night/97 text-night dark:text-paper text-base font-plex rounded-2xl shadow-xl top-[103%] pointer-events-auto select-text transition",
-          open ? "opacity-100 scale-100 z-50" : "opacity-0 scale-95 z-0"
-        )}
-        role="dialog" aria-modal="true"
-        style={{ left: `calc(50% + ${popoverPos.shiftX}px)`, transform: "translateX(-50%)" }}
-        animate={{ opacity: open ? 1 : 0, y: open ? 13 : 21 }}
-        aria-live="polite"
-      >
-        <div aria-hidden className="absolute left-0 right-0 mx-auto w-fit top-[-12px]" style={{ left: popoverPos.pointerX, transform: "translateX(-50%)" }}>
-          <svg width="22" height="12" viewBox="0 0 22 12"><path d="M1 12L11 2L21 12Z" fill="currentColor" className="text-white dark:text-night" /></svg>
-        </div>
-        <div className="font-bold text-accent-blue dark:text-accent-gold">{tech.name}</div>
-        <div className="text-xs font-normal mt-1">{tech.details}</div>
-      </motion.div>
-    </motion.a>
-  );
-});
-
-/* ==== TESTIMONIALS with premium animation/dots ==== */
-function TestimonialsSection() {
-  const [cur, setCur] = useState(0);
-  return (
-    <section id="testimonials" className="py-section bg-paper dark:bg-night min-h-[30vh] overflow-x-hidden">
-      <h2 className="text-3xl md:text-5xl font-heavy text-accent-blue dark:text-accent-gold text-center mb-10">
-        What users say
-      </h2>
-      <div className="relative w-full flex items-center justify-center">
-        <AnimatePresence mode="wait">
-          <motion.figure key={testimonials[cur].text}
-            className="bg-glass-light dark:bg-night/75 rounded-glass shadow-profile p-7 flex flex-col items-center text-center mx-auto w-[350px] max-w-full min-h-[250px]"
-            initial={{ y: 16, opacity: 0, scale:0.97 }} animate={{ y: 0, opacity: 1, scale:1.02 }} exit={{ y: -14, opacity: 0 }}
-            transition={{ duration: 0.43, type: "spring", bounce:0.36 }}>
-            <img src={testimonials[cur].img} alt={testimonials[cur].name} className="h-16 w-16 rounded-full border-2 border-accent-gold mb-3" />
-            <blockquote className="italic mb-3 text-lg text-night/95 dark:text-paper/95">{testimonials[cur].text}</blockquote>
-            <figcaption className="font-heavy text-accent-pink dark:text-accent-gold">{testimonials[cur].name}
-              <span className="block font-normal text-night/55 dark:text-paper/60 text-xs">{testimonials[cur].org}</span>
-            </figcaption>
-          </motion.figure>
-        </AnimatePresence>
-        <div className="absolute top-1/2 left-0 flex items-center gap-4 px-4 w-full pointer-events-none select-none justify-center">
-          {testimonials.map((_, i) => (
-            <motion.button key={i} onClick={() => setCur(i)}
-              aria-label={`View testimonial ${i+1}`}
-              tabIndex={0}
-              className={clsx(
-                "mx-2 h-4 w-4 rounded-full border-2 border-accent-gold bg-accent-gold focus:ring-2 focus:ring-accent-gold ring-offset-1 transition",
-                cur===i ? "opacity-95 scale-125 shadow-xl" : "opacity-35"
-              )}
-              whileFocus={{ scale: 1.27 }}
-              whileTap={{ scale: 1.08 }}
-              style={{pointerEvents:'auto'}}
-            />
-          ))}
-        </div>
-      </div>
-    </section>
+      <div className="w-11 h-11 bg-gradient-to-br from-[#52d2fece] via-[#db5afbcc] to-[#75e4b6aa] rounded-full blur-[11px] animate-pulse shadow-xl border border-[#ddf2ff45] opacity-80 transition-all duration-120" />
+    </div>
   );
 }
 
-/* ====== CONTACT/CTA ====== */
-function ContactSection() {
-  const [sent, setSent] = useState(false);
-  const [email, setEmail] = useState("");
-  const [error, setError] = useState("");
-  const handleSend = e => {
-    e.preventDefault();
-    if (!email || !email.includes("@")) return setError("Enter a valid email.");
-    setSent(true); setTimeout(()=>{ setSent(false); setEmail(""); setError(""); }, 2100);
-  };
-  return (
-    <section id="contact" className="py-section min-h-[22vh] flex flex-col items-center bg-night dark:bg-paper/5 text-paper dark:text-night rounded-xl mt-section">
-      <h2 className="text-4xl font-heavy mb-5">Ready to get started?</h2>
-      <p className="mb-7 text-lg opacity-85 text-center max-w-xl font-grotesk font-normal">
-        Next-gen SaaS, on your terms. Pro onboarding in 24h: reach out, and let's launch something amazing.
-      </p>
-      <form className="flex flex-col md:flex-row gap-4 items-center w-full max-w-2xl justify-center" onSubmit={handleSend}>
-        <Input type="email" required value={email} onChange={e=>{setEmail(e.target.value); setError("");}} placeholder="Your Email" />
-        <Button type="submit" icon={<Rocket className="w-5 h-5"/>}>{sent ? "Sent!" : "Send"}</Button>
-      </form>
-      {error && <div className="text-red-500 mt-2">{error}</div>}
-    </section>
-  );
-}
-
-/* ========== WELCOME OVERLAY: Brand, custom greet, animated ========== */
-function WelcomeScreen({ state, user, onDone }) {
-  // See: To go further, add Lottie/react-lottie for actual animated brand mesh
-  const now = new Date(), hr = now.getHours();
-  const greet =
-    hr < 5 ? "Good night" : hr < 12 ? "Good morning" : hr < 18 ? "Good afternoon" : "Good evening";
-  const msg =
-    state === "init"
-      ? <>
-        <span className="flex justify-center mb-4 text-accent-gold drop-shadow-hero">
-          <Sparkles className="w-11 h-11" strokeWidth={2.3} />
-        </span>
-        <div>{greet}, new builder!</div>
-        <div className="text-lg text-accent-gold opacity-80 mt-6 font-plex font-normal">You’re about to try a product with taste.</div>
-      </>
-      : state === "login"
-        ? <div>{greet}, <span className="text-accent-blue dark:text-accent-gold font-bold">{user ? user.split(" ")[0] : ""}</span>!</div>
-        : user
-          ? <div>See you soon, <span className="font-bold">{user.split(" ")[0]}</span>!</div>
-          : <div>Bye! Thank you for visiting.</div>;
+// -------- Foggy Overlay --------
+function FoggyOverlay({ show, type }) {
   return (
     <AnimatePresence>
-      {state && (
-        <motion.div initial={{ opacity: 1 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-          transition={{ duration: .85, type: "spring", bounce:0.33 }}
-          className="fixed inset-0 z-[150] bg-gradient-to-br from-[#2a1157f2] via-[#5e8efdcc] to-[#75e4b6ee] dark:from-night dark:via-accent-blue/80 dark:to-accent-gold/60 flex items-center justify-center"
+      {show && (
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 0.97 }}
+          exit={{ opacity: 0 }}
+          className="fixed inset-0 z-[999] flex flex-col items-center justify-center"
+          style={{
+            backdropFilter: 'blur(18px)',
+            WebkitBackdropFilter: 'blur(18px)',
+            background: `linear-gradient(96deg,#233cfacc,#db5afbc1 80%)`,
+          }}
         >
-          <motion.div initial={{ scale: 0.97, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 1.09, opacity: 0 }}
-            transition={{ type: "spring", delay: .12, duration: 0.57, bounce:0.45 }}
-            className="rounded-3xl shadow-2xl bg-glass-light/70 dark:bg-night px-12 py-13 text-center text-3xl font-grotesk text-accent-blue dark:text-accent-gold flex flex-col items-center"
+          <h1 className="text-5xl font-black text-white mb-3 tracking-tight">
+            {type === 'Logged In' ? 'Welcome!' : 'Logged Out'}
+          </h1>
+          <motion.p
+            initial={{ opacity: 0, y: 16 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="text-lg text-[#c8bdfb] mt-3"
           >
-            {msg}
-            <Button className="mt-8 w-48 text-lg border-none" onClick={onDone}>
-              {state === "logout" ? "Bye" : "Continue"}
-            </Button>
-          </motion.div>
+            {type === 'Logged In'
+              ? "Let's get building with AI-powered magic."
+              : 'Hope to see you again soon!'}
+          </motion.p>
         </motion.div>
       )}
     </AnimatePresence>
   );
 }
 
-/* ========== DEMO CHAT: animated CTAs, a11y, focus trap ========== */
-function LiveDemoSection({ onLogin, onLogout, setUser }) {
-  const [token, setToken] = useState("");
-  const [messages, setMessages] = useState([]);
-  const [isLogin, setIsLogin] = useState(true);
-  const [form, setForm] = useState({ email: "", password: "", name: "" });
-  const promptInputRef = useRef();
-  function handleLogin() {
-    setToken("token"); setUser(form.name || form.email || "User");
-    onLogin && onLogin(form.name || form.email || "User"); setIsLogin(true);
-    setMessages([
-      { role: "user", content: "How do I set up automations?" },
-      { role: "assistant", content: "Go to Integrations, select a trigger, and connect your favorite tool. No code required!" }
-    ]);
-    setTimeout(() => promptInputRef.current && promptInputRef.current.focus(), 400);
-  }
-  function handleLogout() {
-    setToken(""); setMessages([]); setIsLogin(false);
-    setForm({ email: "", password: "", name: "" }); setUser(""); onLogout && onLogout();
-  }
-  function handleSend() {
-    if (!token) return;
-    if (!form.prompt || !form.prompt.trim()) return;
-    setMessages(m => [
-      ...m,
-      { role: "user", content: form.prompt },
-      { role: "assistant", content: "This is a sample AI reply for your prompt." }
-    ]);
-    setForm(f => ({ ...f, prompt: "" }));
-    setTimeout(() => promptInputRef.current && promptInputRef.current.focus(), 410);
-  }
+// -------- Tech Stack Brutal Grid --------
+const stackItems = [
+  {
+    title: 'Frontend',
+    color: '#36c2fc',
+    tools: ['React 18', 'Vite', 'Tailwind CSS', 'Framer Motion'],
+    desc: 'Ultra-smooth interactive UI with hot reload, state-of-art motion & utility-first design.',
+    details: `SPA architecture, zero JS legacy, pixel-perfect UI alignment, accessible out-of-the-box.`,
+  },
+  {
+    title: 'Backend',
+    color: '#2af48f',
+    tools: ['FastAPI', 'SQLModel', 'PyJWT', 'SQLite'],
+    desc: 'Powered by Python FastAPI: blazing REST endpoints, securable, async at the core.',
+    details: `Strict type checks, async IO, 100% OpenAPI, rapid prototyping & CI/CD tooling.`,
+  },
+  {
+    title: 'Authentication',
+    color: '#fcb900',
+    tools: ['OAuth2/JWT', 'SSO Ready', 'No-Cookie'],
+    desc: 'JWT bearer, future-proofed for cross-platform, mobile, SSO, and devtools.',
+    details: `Zero cookie risk, sessionless API-first login, granular expiry, role-aware endpoints.`,
+  },
+  {
+    title: 'AI Engine',
+    color: '#db5afb',
+    tools: ['OpenRouter GPT-3.5', 'Multi-Persona', 'Live API'],
+    desc: 'Supercharged conversations leveraging OpenRouter: fast streaming, adaptable tone.',
+    details: `ChatGPT strategy, multi-role prompt, translation, code-aware, fun modes.`,
+  },
+  {
+    title: 'Deployment',
+    color: '#75e4b6',
+    tools: ['Docker', 'Local Dev', 'CI/CD', 'Cloud'],
+    desc: 'Zero-pain deploy: run local, prod, or CI/CD. Fast container starts, easy scaling.',
+    details: `Consistent configuration, minimal cold start, enterprise Docker Compose setup.`,
+  },
+];
+
+function TechStackGrid() {
   return (
-    <section id="demo" className="container py-section flex flex-col items-center bg-paper dark:bg-night rounded-glass shadow-glass-morph -mt-14">
-      <h2 className="text-4xl md:text-5xl font-grotesk font-heavy text-accent-blue dark:text-accent-gold mb-7 text-center">Your AI, Live:</h2>
-      <Card className="w-full max-w-2xl mb-5">
-        <div className="mb-8">
-          {!token ? (
-            <form className="space-y-6" aria-label="Authentication form" onSubmit={e => { e.preventDefault(); handleLogin(); }}>
-              {!isLogin && (
-                <Input type="text" required autoComplete="name" placeholder="Full Name" value={form.name}
-                  onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
-                />
-              )}
-              <Input type="email" required autoComplete="email" placeholder="Email" value={form.email}
-                onChange={e => setForm(f => ({ ...f, email: e.target.value }))}
-              />
-              <Input type="password" required placeholder="Password" value={form.password}
-                onChange={e => setForm(f => ({ ...f, password: e.target.value }))}
-              />
-              <Button type="submit" icon={<Layers />}>{isLogin ? "Login" : "Sign Up"}</Button>
-              <div className="text-center text-accent-pink opacity-80 font-medium">
-                {isLogin ? "New user? " : "Already have an account? "}
-                <button type="button" className="underline font-bold cursor-pointer"
-                  onClick={() => setIsLogin(!isLogin)}>
-                  {isLogin ? "Sign up" : "Login"}
-                </button>
-              </div>
-            </form>
-          ) : (
-            <div className="flex flex-col min-h-[360px] pt-1">
-              <div className="flex items-center justify-between mb-3 z-20">
-                <span className="font-bold text-accent-blue dark:text-accent-gold font-plex">Demo Mode</span>
-                <Button variant="secondary" onClick={handleLogout} className="ml-2 underline text-sm px-2 py-1 border-none">Logout</Button>
-              </div>
-              <div className="flex-1 min-h-0 overflow-y-auto px-1 pb-1 pt-1 rounded-xl border border-[#e7d9fa] dark:border-[#31334e60] bg-[#181541f2] dark:bg-[#181926] max-h-[280px]"
-                role="log" aria-live="polite" tabIndex={-1}>
-                {messages.length === 0 ? (
-                  <div className="flex flex-col gap-2 h-full justify-center items-center py-8 select-none text-[#b6a1ff] dark:text-[#a1d4fa] font-plex opacity-85">
-                    <ChatIcon />Start a new conversation!
-                  </div>
-                ) : (
-                  messages.map((msg, i) => (
-                    <div key={i} className={`flex items-start gap-2 mb-1 ${msg.role === "user" ? "justify-end" : "justify-start"}`}>
-                      {msg.role === "assistant" && (<div className="w-7 h-7 rounded-full bg-accent-blue text-xl flex items-center justify-center text-white font-bold"><Sparkles /></div>)}
-                      <div className={`max-w-[90%] px-4 py-2 rounded-2xl text-base font-inter ${msg.role === "user"
-                        ? "bg-gradient-to-tr from-accent-gold via-accent-pink to-accent-blue text-white font-bold"
-                        : "bg-glass-light dark:bg-night/60 text-night dark:text-paper"
-                      }`} aria-label={msg.role === "user" ? "You" : "Assistant"}>{msg.content}</div>
-                      {msg.role === "user" && (<div className="w-7 h-7 rounded-full bg-accent-gold text-xl flex items-center justify-center text-white font-bold"><Users /></div>)}
-                    </div>
-                  ))
-                )}
-              </div>
-              <form className="flex flex-col sm:flex-row gap-2 mt-2 border border-[#decafe] dark:border-[#20264e] bg-[#1b1643] dark:bg-[#191c21] rounded-2xl px-3 py-3 ring-1 ring-[#6939eb10]"
-                onSubmit={e => { e.preventDefault(); handleSend(); }}>
-                <Input ref={promptInputRef} type="text" placeholder="Ask me anything..." maxLength={222}
-                  value={form.prompt || ""} onChange={e=>setForm(f => ({ ...f, prompt: e.target.value }))}
-                  autoComplete="off" aria-label="Prompt input" spellCheck={false}
-                />
-                <Button type="submit" icon={<Rocket className="w-5 h-5" />} variant="primary">Send</Button>
-              </form>
+    <section
+      id="tech-stack"
+      className="relative min-h-[68vh] flex flex-col items-center pt-20 pb-14 px-2"
+      aria-label="Project Tech Stack"
+    >
+      {/* Mesh BG Only for Stack */}
+      <div className="absolute inset-0 pointer-events-none -z-10" aria-hidden="true">
+        <svg width="100%" height="100%" viewBox="0 0 1500 900" fill="none"
+          className="hidden md:block absolute top-0 left-0 opacity-18">
+          <defs>
+            <radialGradient id="meshGlow2" cx="45%" cy="40%" r="70%">
+              <stop stopColor="#36c2fc" offset="0%" />
+              <stop stopColor="#db5afb" offset="70%" />
+              <stop stopColor="#75e4b6" offset="100%" />
+            </radialGradient>
+          </defs>
+          <ellipse cx="900" cy="350" rx="600" ry="280" fill="url(#meshGlow2)" opacity="0.28" />
+        </svg>
+      </div>
+      <motion.h2
+        initial={{ opacity: 0, y: 30 }}
+        whileInView={{ opacity: 1, y: 0 }}
+        viewport={{ once: true }}
+        transition={{ type: 'spring', delay: 0.17 }}
+        className="font-black text-white text-3xl md:text-4xl mb-3 text-center drop-shadow-lg"
+        style={{ fontFamily: 'Space Grotesk' }}
+      >
+        <span className="bg-gradient-to-r from-[#34cefb] via-[#db5afb] to-[#75e4b6] bg-clip-text text-transparent">
+          🧩 Tech Stack: Built for Brutal Velocity
+        </span>
+      </motion.h2>
+      <div className="mb-10 text-lg font-semibold text-[#cfbef5] max-w-2xl text-center">
+        Built on the sharpest modern frameworks, with instant UI feedback and cloud-ready by default.
+      </div>
+      <div className="w-full max-w-6xl grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-10 lg:gap-14">
+        {stackItems.map((item, i) => (
+          <motion.div
+            key={item.title}
+            initial={{ opacity: 0, y: 80, scale: 0.96 }}
+            whileInView={{ opacity: 1, y: 0, scale: 1 }}
+            viewport={{ once: true, margin: '-10% 0px' }}
+            transition={{ type: 'spring', delay: i * 0.10 + 0.11, stiffness: 89, damping: 18 }}
+            whileHover={{ y: -10, scale: 1.05, boxShadow: `0 12px 44px ${item.color}55, 0 3px 11px #0003` }}
+            className="
+              flex flex-col items-start gap-2 
+              bg-[#23213bf8] dark:bg-[#202028e1]
+              border-[2.7px] rounded-[1.6rem] p-7 shadow-xl
+              hover:shadow-2xl transition-all duration-200 border-[#db5afb22] hover:border-[#db5afb56]
+              ring-[#551ab84d] ring-0 hover:ring-4
+              focus-within:ring-8 outline-none
+              backdrop-blur-[3px]
+              select-text
+            "
+            tabIndex={0}
+            aria-label={`Tech: ${item.title}`}
+          >
+            <div className="flex gap-2 items-center text-3xl mb-2">{item.icon}</div>
+            <div
+              className="font-black text-xl mb-1"
+              style={{ color: item.color, fontFamily: 'Space Grotesk' }}
+            >
+              {item.title}
             </div>
-          )}
-        </div>
-      </Card>
-      <p className="text-center opacity-70 mb-2 max-w-xl font-plex">Directly experience your chat, workflow, and AI!</p>
+            <div className="flex flex-wrap gap-2 mb-1">
+              {(item.tools ?? []).map((tool, j) => (
+                <span key={tool} className="rounded bg-[#db5afb18] px-3 py-1 text-xs font-mono text-[#db5afb]">
+                  {tool}
+                </span>
+              ))}
+            </div>
+            <div className="text-[#adc2f1] text-md mb-1">{item.desc}</div>
+            <div className="mt-2 text-[#fffcfbaa] text-xs font-mono">{item.details}</div>
+          </motion.div>
+        ))}
+      </div>
+      <div className="h-16" />
     </section>
   );
 }
-function ChatIcon() {
-  return <svg width={38} height={38} fill="none" stroke="currentColor" strokeWidth={2.3} viewBox="0 0 24 24"><path d="M5 21c-1.1 0-2-.9-2-2V7a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H5zm0 0v2m0-2h14m-7-4v2m0-8v2" /></svg>;
-}
 
-/* ========== MAIN APP EXPORT ========== */
-export default function App() {
-  const [welcome, setWelcome] = useState("init");
-  const [user, setUser] = useState("");
+// -------- Features Section --------
+
+const features = [
+  {
+    icon: (
+      <span className="w-12 h-12 flex items-center justify-center rounded-xl shadow-[0_2px_24px_#7C7CFB33] bg-gradient-to-br from-[#db5afb3c] via-[#52d2fe2a] to-[#fff4b811] text-[2.3rem] z-20 animate-bounce-slow">🤖</span>
+    ),
+    badge: "NEW",
+    title: "Multi-Persona AI",
+    desc: "Effortlessly swap minds: Friendly, Sarcastic, DevGPT, or Translate—all in one, never losing the thread.",
+    reveal: "No prompts are ever leaked. Persona state is yours & encrypted."
+  },
+  {
+    icon: (
+      <span className="w-12 h-12 flex items-center justify-center rounded-xl shadow-[0_1.5px_16px_#db5afbbc] bg-gradient-to-tr from-[#7fb3fb32] via-[#db5afb35] to-[#75e4b645] text-[2.4rem] z-20 animate-pop2">🔒</span>
+    ),
+    badge: "SECURE",
+    title: "JWT Secure Auth",
+    desc: "Passwordless, tamper-proof logins. Tokens, not cookies. Security fit for builders—not marketers.",
+    reveal: "Your tokens never leave. Every session is cryptographically unique."
+  },
+  {
+    icon: (
+      <span className="w-12 h-12 flex items-center justify-center rounded-xl shadow-[0_2px_14px_#a5a3fd51] bg-gradient-to-br from-[#56DEF81a] via-[#e9d2fb29] to-[#adfcaf1c] text-2xl z-20 animate-pop2">📝</span>
+    ),
+    badge: "FOREVER",
+    title: "Persistent History",
+    desc: "Your words, always yours. Auto-save, rename, recover, replay. Never lose your flow, ever.",
+    reveal: "You control deletion. Nothing is harvested. History stays local."
+  },
+  {
+    icon: (
+      <span className="w-12 h-12 flex items-center justify-center rounded-xl shadow-[0_2px_18px_#7bedfd45] bg-gradient-to-tr from-[#b2bcfb28] via-[#db5afb37] to-[#fdfede18] text-2xl z-20 animate-wiggle">⚡</span>
+    ),
+    badge: "FAST",
+    title: "Modern UI/UX",
+    desc: "Glassy cards, kinetic highlights, and true real-time input. Every action stuns. Every pixel flexes.",
+    reveal: "Encrypted at every click & move. UI cues never leak data."
+  },
+  {
+    icon: (
+      <span className="w-12 h-12 flex items-center justify-center rounded-xl shadow-[0_2px_20px_#db5afb29] bg-gradient-to-tl from-[#db5afb22] via-[#75e4b61f] to-[#e5fffa1a] text-2xl z-20 animate-float">📱</span>
+    ),
+    badge: <span className="uppercase tracking-wide text-[#75e4b6] text-xs font-mono">Touch<span className="hidden sm:inline"> Ready</span></span>,
+    title: "Mobile Adaptive",
+    desc: "No breakpoints needed: every tap, swipe and keyboard shortcut is pixel-perfect on any device.",
+    reveal: "Fingerprint/FaceID support. Mobile data stays local, never sent."
+  },
+  {
+    icon: (
+      <span className="w-12 h-12 flex items-center justify-center rounded-xl shadow-[0_3px_16px_#abf8e655] bg-gradient-to-r from-[#db5afb29] via-[#52d2fe3f] to-[#abf8e634] text-2xl z-20 animate-rotate">🔄</span>
+    ),
+    badge: <span className="uppercase tracking-wide text-[#db5afb] text-xs font-mono">OSS</span>,
+    title: "Open Source DNA",
+    desc: "Don’t just use software—own it. Audit, fork, remix for work or pleasure. No vendor lock. Real freedom.",
+    reveal: "Every line is public. No black-box trap. Trust by design."
+  }
+];
+
+export function FeaturesSection() {
+  const ref = useRef();
+  const inView = useInView(ref, { once: true, margin: "-18% 0px" });
+
   return (
-    <ThemeProvider>
-      <div className="bg-paper dark:bg-night min-h-screen font-inter relative">
-        <FogOverlays />
-        <CustomCursor />
-        <DarkModeToggle />
-        <Navbar user={user} />
-        <main className="pt-24 z-10 relative space-y-section">
-          <WelcomeScreen state={welcome} user={user} onDone={() => setWelcome(null)} />
-          <HeroSection />
-          <LiveDemoSection
-            onLogin={(n) => { setUser(n); setWelcome("login"); }}
-            onLogout={() => setWelcome("logout")}
-            setUser={setUser}
-          />
-          <FeaturesSection />
-          <TechStackSection />
-          <TestimonialsSection />
-          <ContactSection />
-        </main>
-      </div>
-    </ThemeProvider>
+    <section
+      ref={ref}
+      className="relative w-full max-w-6xl mx-auto px-5 sm:px-10 py-16 sm:py-24 flex flex-col z-10"
+      aria-label="Brutally Modern Features"
+      tabIndex={-1}
+      style={{
+        background: "radial-gradient(ellipse at top right,rgba(82,210,254,.04) 2%,rgba(219,90,251,.05) 97%)"
+      }}
+    >
+      {/* HEADING */}
+      <motion.h2
+        initial={{ opacity: 0, y: 38, letterSpacing: "-0.16em" }}
+        animate={inView ? { opacity: 1, y: 0, letterSpacing: "0em" } : {}}
+        transition={{ type: "spring", duration: 1, delay: 0.13 }}
+        className="text-4xl sm:text-6xl font-black tracking-tight mb-3 text-center bg-gradient-to-r from-[#db5afb] via-[#5e8efd] to-[#75e4b6] bg-clip-text text-transparent drop-shadow-[0_2px_32px_#db5afb56] select-text"
+        style={{ fontFamily: "'Space Grotesk','JetBrains Mono',sans-serif" }}
+        tabIndex={0}
+      >
+        FEATURES
+      </motion.h2>
+      {/* Tagline */}
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={inView ? { opacity: 1, y: 0 } : {}}
+        transition={{ type: "spring", duration: 0.65, delay: 0.24 }}
+        className="mx-auto max-w-xl text-center mb-12 text-xl sm:text-2xl font-semibold text-[#c7f7ff] tracking-tight z-10 flex flex-col gap-1"
+        style={{ fontFamily: "'JetBrains Mono','Space Grotesk',sans-serif" }}
+      >
+        <span>
+          Coz we secure <b className="text-[#db5afb]">everything you can think of</b>.
+        </span>
+        <span className="text-[#8dbad6] font-bold text-lg sm:text-xl">
+          <span className="inline-block animate-pulse">→</span>{" "}
+          <span className="inline-block">Hover/tap any feature to reveal <span className="text-[#75e4b6]">how we protect you</span>.</span>
+        </span>
+      </motion.div>
+
+      <motion.div
+        initial={{ opacity: 0, scale: 0.97, y: 28, filter: "blur(7px)" }}
+        animate={inView ? { opacity: 1, scale: 1, y: 0, filter: "blur(0px)" } : {}}
+        transition={{ type: "spring", duration: 1, delay: 0.23 }}
+        className="relative grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-12"
+      >
+        {features.map((f, i) => (
+          <motion.div
+            key={f.title}
+            initial={{ opacity: 0, y: 30, filter: "blur(2px)" }}
+            animate={inView ? { opacity: 1, y: 0, filter: "blur(0)" } : {}}
+            transition={{
+              delay: 0.12 * i + 0.08,
+              type: "spring",
+              stiffness: 115,
+              duration: 0.63,
+            }}
+            tabIndex={0}
+            aria-label={`Feature: ${f.title}`}
+            className={`
+              group relative focus:outline-none
+              flex flex-col items-start md:items-center gap-5
+              bg-white/75 dark:bg-[#181b2be9] bg-clip-padding
+              rounded-[2.2rem] border border-[#e6cbfa] dark:border-[#23204c]
+              shadow-[0_10px_48px_#db5afb13]
+              px-9 py-11 overflow-hidden
+              ring-[#6939eb44] transition-all
+              hover:scale-[1.055] hover:ring-8 hover:z-20 hover:bg-white/95 dark:hover:bg-[#191933fb]
+              focus:ring-8
+              cursor-pointer
+              will-change-transform
+              backdrop-blur-[18px]
+              duration-200
+            `}
+            style={{
+              WebkitBackdropFilter: "blur(15px) saturate(1.23)",
+              backdropFilter: "blur(15px) saturate(1.23)"
+            }}
+          >
+            {/* Badge */}
+            {f.badge && (
+              <div className="absolute -top-3 right-5 z-30 drop-shadow-md text-[.97em]">{f.badge}</div>
+            )}
+            {/* Animated Glass Removal (for Reveal) */}
+            <div
+              className={
+                "absolute inset-0 pointer-events-none transition-all duration-300 z-40 rounded-[2.1rem] " +
+                "group-hover:opacity-0 group-focus:opacity-0"
+              }
+              aria-hidden="true"
+              style={{
+                background:
+                  "rgba(255,255,255,0.18) linear-gradient(135deg,#db5afb26 0%,#5e8efd26 69%,#75e4b60e 100%)",
+                WebkitBackdropFilter: "blur(13.5px) saturate(1.17)",
+                backdropFilter: "blur(13.5px) saturate(1.17)",
+                transition: "opacity 0.25s, filter 0.26s"
+              }}
+            />
+            {/* Icon */}
+            <div className="z-20 relative">{f.icon}</div>
+            {/* Main Content (fades out on hover) */}
+            <div
+              className="transition-all duration-300 ease-in-out flex flex-col items-center w-full"
+            >
+              <div className="font-black text-lg md:text-2xl text-[#db5afb] group-hover:text-[#5e8efd] dark:group-hover:text-[#e7faff] transition tracking-tight leading-tight mb-1">
+                {f.title}
+              </div>
+              <div className="text-[#32405c] dark:text-[#b0a9e6] text-base md:text-lg leading-tight mt-1 font-mono text-center">
+                {f.desc}
+              </div>
+            </div>
+
+            {/* Reveal Layer (shows on hover/focus/tap, pointer-events yes only when visible) */}
+            <div
+              className={`absolute inset-0 flex flex-col justify-center items-center px-6 py-10
+                rounded-[2.1rem] bg-gradient-to-br from-[#1c1a59dd] via-[#52d2fe27] to-[#db5afb19]
+                text-[#db5afb] dark:text-[#82eefa] text-center text-lg font-bold opacity-0
+                pointer-events-none group-hover:opacity-100 group-focus:opacity-100
+                group-hover:pointer-events-auto group-focus:pointer-events-auto
+                select-text z-50 transition-all duration-300`}
+              role="alert"
+              aria-hidden="true"
+            >
+              
+              
+            </div>
+            {/* Neon Line */}
+            <span className="absolute left-6 right-6 bottom-2 h-[2px] bg-gradient-to-r from-[#5e8efd80] via-[#db5afb80] to-[#75e4b6bb] rounded-full opacity-85 pointer-events-none group-hover:opacity-100 transition-all" />
+          </motion.div>
+        ))}
+      </motion.div>
+
+      {/* Section footer or meta, as before */}
+      <motion.div
+        initial={{ opacity: 0, y: 21 }}
+        animate={inView ? { opacity: 0.95, y: 0 } : {}}
+        transition={{ duration: 0.7, type: "spring", delay: features.length * 0.12 + 0.23 }}
+        className="mt-14 text-center font-mono text-[1.08rem] tracking-tight text-[#a9b2e8] pointer-events-none select-none"
+      >
+        <b className="font-black text-[#db5afb]">Explore. Touch. Feel safe.</b>  
+        Privacy isn’t just a footnote—it’s right here, proven.
+      </motion.div>
+    </section>
   );
 }
-const baseUrl = import.meta.env.VITE_API_URL;
+
+// -------- Section Divider --------
+const SectionDivider = () => (
+  <motion.div
+    initial={{ scaleX: 0.6, opacity: 0 }}
+    whileInView={{ scaleX: 1, opacity: 1 }}
+    viewport={{ once: true }}
+    transition={{ duration: 0.88, type: 'spring' }}
+    className="w-[36vw] max-w-lg mx-auto my-14 h-[5px] rounded-full bg-gradient-to-r from-[#db5afb77] via-[#53c9f2cc] to-[#75e4b6ad] blur-[2.8px]"
+  />
+);
+
+// -------- Hero Section --------
+const headline = [
+  { text: "BRUTAL.", colors: "from-[#52d2fe] via-[#db5afb] to-[#73eec9]" },
+  { text: "EFFECTIVE.", colors: "from-[#db5afb] via-[#75e4b6] to-[#52d2fe]" },
+  { text: "GENAI PRO.", colors: "from-[#7C7CFB] via-[#db5afb] to-[#56DEF8]" },
+];
+const TypewriterHeadline = ({ inView }) => {
+  const wordVariants = {
+    hidden: { opacity: 0, y: 30, scale: 0.96 },
+    visible: i => ({
+      opacity: 1, y: 0, scale: 1,
+      transition: { delay: 0.19 + i * 0.29, type: "spring", bounce: 0.5 }
+    }),
+  };
+  return (
+    <div
+      className="flex flex-col md:flex-row md:gap-2 items-center justify-center mb-1 select-text"
+      style={{
+        fontFamily: "'Space Grotesk', 'JetBrains Mono', ui-sans-serif",
+      }}
+    >
+      {headline.map((h, i) => (
+        <motion.span
+          key={h.text}
+          custom={i}
+          variants={wordVariants}
+          initial="hidden"
+          animate={inView ? "visible" : "hidden"}
+          className={`text-5xl md:text-7xl inline-block font-black tracking-tight leading-tight bg-gradient-to-r ${h.colors} bg-clip-text text-transparent drop-shadow-[0_2px_10px_#5540bbaa] transition duration-300 hover:saturate-150 hover:scale-105 cursor-pointer`}
+          whileHover={{
+            textShadow: "0 2px 22px #db5afb,0 1px 7px #52d2fe",
+            rotate: i % 2 === 0 ? -1.7 : 1.7,
+          }}
+        >{h.text}</motion.span>
+      ))}
+    </div>
+  );
+};
+
+const TaglineTypewriter = ({ inView }) => {
+  const taglinePieces = [
+    { text: "Not just fast —", color: "text-[#52d2fe]" },
+    { text: "transformative.", color: "text-[#db5afb]" },
+    { br: true },
+    { text: "Not just smart —", color: "text-[#75e4b6]" },
+    { text: "brutal design.", color: "text-[#fa76fa]" },
+  ];
+  const wordVariants = {
+    hidden: { opacity: 0, y: 12 },
+    visible: i => ({
+      opacity: 1, y: 0,
+      transition: { delay: 0.8 + i * 0.11, type: "spring" }
+    }),
+  };
+  let idx = -1;
+  return (
+    <p className="text-2xl sm:text-3xl font-semibold max-w-2xl mx-auto mt-6 mb-2 text-[#e7faff] flex flex-wrap gap-x-2 justify-center" style={{ fontFamily: "'JetBrains Mono', 'Space Grotesk', sans-serif" }}>
+      {taglinePieces.map((piece, i) => {
+        if (piece.br) return <br key={i} />;
+        idx++;
+        return (
+          <motion.span
+            key={i}
+            custom={idx}
+            variants={wordVariants}
+            initial="hidden"
+            animate={inView ? "visible" : "hidden"}
+            className={`transition-colors duration-200 font-bold hover:text-white cursor-pointer ${piece.color}`}
+            whileHover={{ scale: 1.08, textShadow: "0 2px 12px #db5afb" }}
+          >{piece.text}</motion.span>
+        );
+      })}
+    </p>
+  );
+};
+
+export function BrutalLandingHero() {
+  const ref = useRef();
+  const inView = useInView(ref, { once: true, margin: "-10% 0px" });
+  const mascotControls = useAnimation();
+
+  useEffect(() => {
+    if (inView) {
+      mascotControls.start({
+        scale: [0.85, 1.12, 1],
+        opacity: 1,
+        rotate: [-6, 2, 0],
+        transition: { duration: 0.98, type: "spring", bounce: 0.6, delay: 0.14 }
+      });
+    }
+  }, [inView, mascotControls]);
+
+  return (
+    <section
+      ref={ref}
+      className="relative min-h-[100vh] w-full flex flex-col justify-center items-center text-center bg-[#13151a] overflow-hidden select-none"
+      aria-label="GenAI Pro Splash"
+    >
+      {/* Mesh/Noise brutalist BG */}
+      <motion.div
+        initial={{ opacity: 0, scale: 1.13 }}
+        animate={{ opacity: 1, scale: 1 }}
+        transition={{ type: "spring", duration: 2, delay: 0.09 }}
+        className="absolute inset-0 z-0 pointer-events-none"
+        aria-hidden="true"
+      >
+        <div className="absolute inset-0 mix-blend-luminosity opacity-70 bg-[url('/textures/mesh-bg.png')] bg-cover"></div>
+        <div className="absolute inset-0 opacity-14 pointer-events-none bg-[url('/textures/grain.png')] bg-repeat"></div>
+      </motion.div>
+
+    
+
+      {/* Headline with animated/staggered reveal */}
+      <TypewriterHeadline inView={inView} />
+
+      {/* Animated tagline */}
+      <TaglineTypewriter inView={inView} />
+
+      {/* CTA */}
+      <motion.div
+        initial={{ opacity: 0, scale: 0.93 }}
+        animate={inView ? { opacity: 1, scale: 1 } : {}}
+        transition={{ delay: 1.06, type: "spring", stiffness: 220 }}
+        className="pt-6"
+      >
+        <button
+  onClick={() => {
+    const el = document.getElementById("aichat");
+    if (el) el.scrollIntoView({ behavior: "smooth" });
+  }}
+  className="px-11 py-5 rounded-full uppercase font-black shadow-xl text-lg tracking-widest
+    bg-gradient-to-tr from-[#db5afb] via-[#5e8efd] to-[#75e4b6]
+    hover:scale-105 hover:bg-gradient-to-tl border-4 border-[#fff3]
+    transition-all duration-200 hover:rotate-[-1.1deg] hover:shadow-pulse focus:outline-none focus:ring-4 focus:ring-[#52d2fe50]"
+  aria-label="Unleash GenAI Pro"
+>
+  <span className="transition-all duration-200 hover:text-[#52d2fe]">UNLEASH GENAI</span>
+</button>
+      </motion.div>
+
+      {/* Footer */}
+      <motion.div
+        initial={{ opacity: 0, y: 28 }}
+        animate={inView ? { opacity: 0.77, y: 0 } : {}}
+        transition={{ delay: 1.2, type: "spring", duration: 1.1 }}
+        className="absolute bottom-7 w-full text-center px-3 pointer-events-none font-mono text-[#98a2ec] text-lg"
+      >
+        Welcome, dev. The future is here.<span className="animate-pulse">_</span>
+      </motion.div>
+    </section>
+  );
+}
+// -------- Main Functionality Section --------
+const FeaturesRow = [
+  {
+    icon: (
+      <svg width="28" height="28" fill="none" viewBox="0 0 24 24">
+        <rect x="2" y="2" width="20" height="20" rx="7" fill="#db5afb18"/>
+        <path d="M7 17V7h10v10H7z" stroke="#db5afb" strokeWidth="2.2"/>
+        <circle cx="12" cy="12" r="2" fill="#56DEF8"/>
+      </svg>
+    ),
+    label: "Realtime AI Chat",
+  },
+  {
+    icon: (
+      <svg width="28" height="28" fill="none" viewBox="0 0 24 24">
+        <rect x="2" y="2" width="20" height="20" rx="7" fill="#75e4b622"/>
+        <rect x="7" y="11" width="10" height="2" rx="1" fill="#5e8efd"/>
+        <rect x="11" y="7" width="2" height="10" rx="1" fill="#fa76fa"/>
+      </svg>
+    ),
+    label: "Persona Switching",
+  },
+  {
+    icon: (
+      <svg width="28" height="28" fill="none" viewBox="0 0 24 24">
+        <rect x="2" y="2" width="20" height="20" rx="7" fill="#56DEF81a"/>
+        <path d="M8 15l4-6 4 6" stroke="#db5afb" strokeWidth="1.8"/>
+        <circle cx="12" cy="12" r="2" fill="#db5afb"/>
+      </svg>
+    ),
+    label: "Adaptive Themes",
+  },
+  {
+    icon: (
+      <svg width="28" height="28" fill="none" viewBox="0 0 24 24">
+        <rect x="2" y="2" width="20" height="20" rx="7" fill="#5e8efd19"/>
+        <path d="M7 12h10M12 7v10" stroke="#75e4b6" strokeWidth="2"/>
+      </svg>
+    ),
+    label: "Saveable History",
+  },
+];
+
+export const MainFunctionality = () => (
+  <section className="w-full px-5 sm:px-8 py-12 max-w-6xl mx-auto relative flex flex-col items-center z-10">
+    {/* GLASS/GRADIENT BLUR BG for depth */}
+    <div className="absolute inset-0 -z-10 opacity-80 pointer-events-none bg-gradient-to-tr from-[#18143fdd] via-[#db5afb0C] to-[#75e4b60A] blur-md rounded-[2.5rem]" />
+    
+    {/* Kinetic, brutalist Section Title */}
+    <h2
+      className="text-4xl md:text-5xl font-black mb-9 bg-gradient-to-r from-[#db5afb] via-[#5e8efd] to-[#75e4b6] bg-clip-text text-transparent text-center tracking-tighter 
+        drop-shadow-xl transition-all duration-200 select-text"
+      tabIndex={0}
+      style={{ fontFamily: "'Space Grotesk', 'JetBrains Mono', ui-sans-serif" }}
+    >
+      {Array.from("🛠 MAIN FUNCTIONALITY").map((chr, i) =>
+        chr === " " ? (
+          <span key={i}>&nbsp;</span>
+        ) : (
+          <span
+            key={i}
+            className="inline-block transition-transform duration-150 hover:scale-125 hover:text-[#fff]"
+            style={{
+              transitionDelay: `${i * 8}ms`,
+              cursor: "pointer",
+            }}
+            tabIndex={-1}
+          >
+            {chr}
+          </span>
+        )
+      )}
+    </h2>
+
+    {/* Visual Feature "Pills" Row */}
+    <div className="flex flex-wrap gap-3 justify-center mb-10">
+      {FeaturesRow.map((f, idx) => (
+        <div
+          key={f.label}
+          className="flex items-center gap-1 px-4 py-2 rounded-full bg-[#1a17342d] border border-[#23223b44] text-base font-mono font-bold uppercase transition hover:shadow-[0_1px_16px_#db5afb33] hover:bg-[#221b36] cursor-pointer"
+          tabIndex={0}
+        >
+          <span className="">{f.icon}</span>
+          <span className="transition-colors duration-100 text-[#db5afb] hover:text-[#fff]">{f.label}</span>
+        </div>
+      ))}
+    </div>
+
+    {/* Main two-column layout */}
+    <div className="flex flex-col md:flex-row gap-10 w-full items-stretch">
+      <div className="w-full md:w-[66%] bg-[#db5afb0e] rounded-3xl shadow-2xl p-10 flex flex-col justify-between border-[1.7px] border-[#2f2f53]">
+        <header className="flex items-center gap-3 mb-4">
+          <span className="block w-10 h-10 bg-gradient-to-br from-[#db5afb88] to-[#5e8efd44] rounded-lg shadow-md" />
+          <h3 className="font-black text-xl md:text-2xl text-[#db5afb] tracking-tighter" style={{
+            fontFamily: "'Space Grotesk', 'JetBrains Mono', ui-sans-serif"
+          }}>
+            LIVE CHAT WORKSPACE
+          </h3>
+        </header>
+        <ul className="list-disc list-inside text-[#b4bfee] space-y-2 ml-2 font-mono text-base">
+          <li>Realtime, multi-persona AI collaboration</li>
+          <li>Kinetic workspace with dynamic prompt and persona switching</li>
+          <li>Animated, message-driven chat bubbles and semantic blocks</li>
+          <li>Save/load history — natural flow, developer-grade</li>
+        </ul>
+        <footer className="mt-8 text-[#db5afb] font-bold italic opacity-80 text-lg">
+          Try it below.<span className="ml-2 text-[#75e4b6]">Say "Hello AI!"</span>
+        </footer>
+      </div>
+
+      {/* SIDE: system/UI highlights */}
+      <div className="w-full md:w-[34%] flex flex-col gap-6">
+        <div className="rounded-3xl bg-gradient-to-br from-[#5e8efd0b] via-[#db5afb0f] to-[#99f7dd1a] border-2 border-[#c5a8fd33] p-7 shadow-xl text-[#bbd6f7] font-mono text-base transition hover:shadow-[0_2px_24px_#db5afb22]">
+          <b className="block mb-3 text-[#db5afb] font-black tracking-wide text-lg">
+            HIGHLIGHTS:
+          </b>
+          <ul className="list-disc list-inside space-y-1 pl-4">
+            <li>Modern, micro-animated UI</li>
+            <li>Secure backend + JWT login</li>
+            <li>Save/restore full chat history</li>
+            <li>Adaptive for dark/light themes</li>
+          </ul>
+        </div>
+        <div className="rounded-3xl bg-[#16132a0d] border border-[#4e408c29] p-6 shadow-lg text-[#d1beff] font-mono text-sm">
+          <span className="font-semibold tracking-wide uppercase text-[#db5afb] mb-1 block">PRO TIP:</span>
+          Every action is <b className="text-[#75e4b6]">instant</b>, every message is <b className="text-[#fa76fa]">recoverable</b>.
+        </div>
+      </div>
+    </div>
+  </section>
+);
+
+// -------- Chat Message Bubble --------
+const roleIcon = role =>
+  role === "user"
+    ? <span aria-label="You" className="mr-2 select-none">🧑</span>
+    : <span aria-label="AI" className="mr-2 select-none">🤖</span>;
+
+export const MessageBubble = ({ msg, i }) => (
+  <motion.div
+    key={i}
+    initial={{ opacity: 0, y: 28, scale: 0.97 }}
+    whileInView={{ opacity: 1, y: 0, scale: 1 }}
+    viewport={{ once: false }}
+    transition={{
+      delay: 0.045 * i,
+      type: "spring",
+      stiffness: 225,
+      damping: 21,
+    }}
+    whileHover={{
+      scale: 1.035,
+      boxShadow: msg.role === "user"
+        ? "0 5px 42px #db5afb22, 0 1px 5px #e1dcff50"
+        : "0 5px 44px #73d1f238, 0 1px 5px #1e90fd40",
+      borderColor: msg.role === "user" ? "#db5afb" : "#73d1f2"
+    }}
+    className={`
+      w-full flex
+      ${msg.role === "user" ? "justify-end" : "justify-start"}
+      mb-2 md:mb-3
+      pointer-events-auto
+      group
+    `}
+    role="listitem"
+  >
+    <div
+      className={`
+        px-5 py-3
+        max-w-[85vw] md:max-w-[70%]
+        rounded-[1.4em]
+        text-[1.12rem] leading-snug font-medium
+        relative
+        shadow-sm transition
+        border-2
+        ${
+          msg.role === "user"
+            ? "bg-gradient-to-br from-[#f4f1fe] to-[#e1dcff] text-[#4931b1] border-[#db5afb60] shadow-[0_1.5px_10px_#db5afb06] self-end"
+            : "bg-[#181936e9] text-[#edf6ff] border-[#73d1f250] shadow-[0_1.5px_12px_#7be6fa13] self-start"
+        }
+        group-hover:scale-[1.035]
+        group-hover:border-[#db5afb] group-hover:z-20
+        focus:outline-none focus:ring-2 focus:ring-[#52d2fe60]
+      `}
+      tabIndex={0}
+    >
+      <span
+        className={`inline-block align-middle ${
+          msg.role === "user"
+            ? "opacity-65 text-[#db5afb] mr-2"
+            : "opacity-65 text-[#52d2fe] mr-2"
+        }`}
+        aria-hidden="true"
+      >
+        {roleIcon(msg.role)}
+      </span>
+      <span
+        className={`
+          break-words hyphens-auto
+          ${msg.role === "user" ? "font-bold" : "font-normal"}
+          select-text
+        `}
+      >
+        {msg.content}
+      </span>
+      {/* (Optional) subtle triangle "bubble tail" for chat look */}
+      <span
+        className={`
+          absolute -bottom-2 w-5 h-5 z-0
+          ${
+            msg.role === "user"
+              ? "right-2 rotate-45 bg-[#e1dcff] border-b-2 border-r-2 border-[#db5afb80]"
+              : "left-2 rotate-45 bg-[#181936e9] border-b-2 border-l-2 border-[#73d1f250]"
+          }
+          rounded-sm
+        `}
+        aria-hidden="true"
+        style={{ boxShadow: msg.role === "user" ? "1px 1px 10px #db5afb18" : "1px 1px 10px #52d2fe11" }}
+      ></span>
+    </div>
+  </motion.div>
+);
+
+const email = "kartikbhargava1111@gmail.com"; // <--- change as needed!
+const linkedin = "https://www.linkedin.com/in/kartik-sharma-dev"; // update for real!
+const github = "https://github.com/kartiksharmaweb"; // update for real!
+
+const palette = {
+  mainGrad: "from-[#db5afb] via-[#5e8efd] to-[#73eec9]",
+  neonBox: "ring-2 ring-[#db5afb77] border-[#5e8efd50]",
+};
+
+export function Footer() {
+  const [copied, setCopied] = useState(false);
+  const [msg, setMsg] = useState("");
+  const [sending, setSending] = useState(false);
+  const [sent, setSent] = useState(false);
+
+  function copyToClipboard(mail, setCopied) {
+    navigator.clipboard?.writeText(mail);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1600);
+  }
+
+  function handleMail(e) {
+    e.preventDefault();
+    if (!msg.trim()) return;
+    setSending(true);
+    const mailto = `mailto:${email}?subject=Contact from GenAI Pro&body=${encodeURIComponent(msg.trim())}`;
+    window.open(mailto, "_blank");
+    setTimeout(() => {
+      setSending(false);
+      setSent(true);
+      setMsg("");
+      setTimeout(() => setSent(false), 2000);
+    }, 400);
+  }
+
+  return (
+    <motion.footer
+      initial={{ opacity: 0, y: 30 }}
+      whileInView={{ opacity: 1, y: 0 }}
+      viewport={{ once: true }}
+      transition={{ type: "spring", delay: 0.18, duration: 0.5 }}
+      className={`
+        w-full max-w-4xl mx-auto mt-20 mb-8 py-10 px-4 rounded-[2rem]
+        bg-[#181932f0] dark:bg-[#1a1d31f9] shadow-[0_4px_38px_#db5afb16]
+        flex flex-col gap-7 items-center border ${palette.neonBox}
+        backdrop-blur-[11px] relative z-40
+      `}
+      style={{
+        fontFamily: "'Space Grotesk', 'JetBrains Mono', ui-sans-serif, system-ui, sans-serif"
+      }}
+      aria-label="Project footer and contact"
+    >
+      {/* Brand & stack badge */}
+      <div className="flex flex-col items-center gap-1 mb-3">
+        <span className={`font-black text-2xl tracking-tight bg-gradient-to-r ${palette.mainGrad} bg-clip-text text-transparent select-text`}>GenAI Pro</span>
+        <span className="text-base font-mono text-[#e5eaff] dark:text-[#81bfdd] font-bold tracking-widest bg-[#271a39]/60 px-4 py-1 rounded-xl mt-1 shadow ring-1 ring-[#5e8efd14] select-all">
+          Solo Project • React • Tailwind • Framer • FastAPI
+        </span>
+      </div>
+      {/* Name + Social icons */}
+      <div className="flex flex-col items-center gap-0.5 mb-1">
+        <span className="font-black text-[1.09rem] sm:text-xl tracking-wide text-[#db5afb] select-text">Kartik Sharma</span>
+        <span className="font-mono text-[#75e4b6] text-sm font-bold uppercase tracking-widest">
+          Indie Creator &nbsp;
+          <span className="text-[#8caeff]">|</span>
+          <a
+            href={linkedin}
+            target="_blank"
+            rel="noopener noreferrer"
+            aria-label="LinkedIn"
+            className="mx-2 text-[#5e8efd] hover:text-[#db5afb] hover:underline transition group"
+          >
+            <svg aria-hidden width="20" height="20" viewBox="0 0 24 24" className="inline align-text-bottom mr-1 group-hover:scale-110 transition" fill="currentColor"><path d="M19 0h-14c-2.75 0-5 2.25-5 5v14c0 2.75 2.25 5 5 5h14c2.75 0 5-2.25 5-5v-14c0-2.75-2.25-5-5-5zm-11 19h-3v-9h3v9zm-1.5-10.16c-.97 0-1.75-.78-1.75-1.75s.78-1.75 1.75-1.75 1.75.78 1.75 1.75-.78 1.75-1.75 1.75zm15.5 10.16h-3v-4.5c0-1.08-.02-2.47-1.5-2.47-1.51 0-1.74 1.18-1.74 2.39v4.58h-3v-9h2.88v1.23h.04c.4-.75 1.38-1.54 2.83-1.54 3.03 0 3.59 1.99 3.59 4.58v5.73z"/></svg>
+            LinkedIn
+          </a>
+          <span className="mx-2 text-[#8caeff]">|</span>
+          <a
+            href={github}
+            target="_blank"
+            rel="noopener noreferrer"
+            aria-label="GitHub"
+            className="mx-1 text-[#db5afb] hover:text-[#5e8efd] hover:underline transition group"
+          >
+            <svg aria-hidden width="20" height="20" viewBox="0 0 24 24" className="inline align-text-bottom mr-1 group-hover:scale-110 transition" fill="currentColor"><path d="M12 0c-6.63 0-12 5.37-12 12 0 5.3 3.438 9.799 8.207 11.386.6.111.82-.259.82-.577v-2.022c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.73.083-.73 1.205.084 1.842 1.236 1.842 1.236 1.07 1.834 2.807 1.304 3.492.997.108-.774.419-1.304.762-1.604-2.665-.305-5.466-1.334-5.466-5.932 0-1.311.469-2.382 1.235-3.222-.123-.305-.535-1.537.117-3.205 0 0 1.008-.322 3.3 1.23.957-.266 1.984-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.289-1.552 3.295-1.23 3.295-1.23.653 1.668.241 2.9.118 3.205.77.84 1.234 1.911 1.234 3.222 0 4.61-2.804 5.624-5.475 5.921.43.372.824 1.104.824 2.228v3.301c0 .321.219.694.825.576 4.765-1.589 8.199-6.088 8.199-11.386 0-6.63-5.373-12-12-12z" /></svg>
+            GitHub
+          </a>
+        </span>
+      </div>
+      {/* Message/email form */}
+      <form
+        className="max-w-md w-full mx-auto px-3 flex flex-col sm:flex-row gap-3 items-center"
+        onSubmit={handleMail}
+        autoComplete="off"
+      >
+        <input
+          type="text"
+          value={msg}
+          onChange={e => setMsg(e.target.value)}
+          placeholder="Say hi, collab, or feedback…"
+          disabled={sending || sent}
+          required
+          minLength={2}
+          className={`
+            flex-1 px-5 py-3 rounded-xl font-mono text-base bg-[#cddaee29] border border-[#db5afb44]
+            focus:ring-2 focus:ring-[#5e8efd] outline-none transition
+            text-[#f6f4f3] placeholder-[#aab3cc] shadow
+          `}
+          aria-label="Your message"
+        />
+        <button
+          type="submit"
+          disabled={sending || !msg.trim()}
+          className={`
+            flex items-center gap-2 px-7 py-3 rounded-xl font-black text-base
+            uppercase tracking-wide bg-gradient-to-tr from-[#db5afb] via-[#5e8efd] to-[#75e4b6]
+            hover:bg-gradient-to-tl border-2 border-[#fff1] transition-all
+            focus:outline-none focus:ring-2 focus:ring-[#db5afb] active:scale-97
+            text-[#191733] shadow-xl
+          `}
+          aria-label="Send message by email"
+        >
+          ✉ {sending ? "Sending…" : sent ? "Sent!" : "Mail Me"}
+        </button>
+      </form>
+      {sent && (
+        <div className="font-bold mt-1 text-[#db5afb] animate-pulse">
+          Thanks! Check your mail app 💌
+        </div>
+      )}
+      {/* Copy-to-clipboard */}
+      <div className="mt-3 flex items-center gap-3 justify-center">
+        <button
+          type="button"
+          onClick={() => copyToClipboard(email, setCopied)}
+          className="flex items-center gap-1 font-mono font-bold text-[#5e8efd] hover:text-[#db5afb] px-3 py-1 rounded-lg bg-[#25265520] border border-[#5e8efd44] transition shadow"
+          aria-label="Copy my email address"
+        >
+          <span>Copy Email</span>
+          <span className="text-[#98eecf] select-all">{email}</span>
+          {copied && (
+            <span className="ml-2 text-[#db5afb] animate-bounce">✓ Copied!</span>
+          )}
+        </button>
+      </div>
+      {/* Tech stack badges */}
+      <div className="mt-4 flex flex-wrap justify-center items-center gap-4 text-[15px] font-bold opacity-90">
+        <span className="bg-gradient-to-tr from-[#db5afb3a] to-[#75e4b622] px-3 py-1 rounded-lg text-[#db5afb]">React</span>
+        <span className="bg-gradient-to-tr from-[#5e8efd38] to-[#db5afb19] px-3 py-1 rounded-lg text-[#5e8efd]">Tailwind</span>
+        <span className="bg-gradient-to-tr from-[#73eec941] to-[#5e8efd1a] px-3 py-1 rounded-lg text-[#73eec9]">Framer</span>
+        <span className="bg-gradient-to-tr from-[#f0c84c38] to-[#db5afb25] px-3 py-1 rounded-lg text-[#f0c84c]">FastAPI</span>
+      </div>
+      {/* Legal */}
+      <div className="mt-4 w-full border-t border-[#312c53] pt-3 text-xs font-mono text-[#a6b1ca] text-center opacity-80">
+        &copy; {new Date().getFullYear()} Kartik Bhargava · All rights reserved.{" "}
+        <span className="mx-2 text-[#5e8efd]">|</span>
+        <a className="text-[#db5afb] underline hover:no-underline" href={`mailto:${email}`}>Contact me</a>
+      </div>
+    </motion.footer>
+  );
+}
+// ----------- MAIN APP COMPONENT -----------
+export default function App() {
+  // --- State ---
+  const [name, setName] = useState('');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [prompt, setPrompt] = useState('');
+  const [token, setToken] = useState(() => localStorage.getItem('token') ?? '');
+  const [isLoginMode, setIsLoginMode] = useState(true);
+  const [messages, setMessages] = useState([]);
+  const [conversations, setConversations] = useState([]);
+  const [showHistory, setShowHistory] = useState(false);
+  const [persona, setPersona] = useState('friendly');
+  const [selectedConversation, setSelectedConversation] = useState(null);
+  const [showFog, setShowFog] = useState(false);
+  const [error, setError] = useState('');
+  const [isPending, setIsPending] = useState(false);
+  const chatBoxRef = useRef();
+  const promptInputRef = useRef();
+  const API_BASE = 'http://localhost:8000';
+
+  // ---- Effects ----
+  useEffect(() => {
+    if (chatBoxRef.current) {
+      chatBoxRef.current.scrollTo({
+        top: chatBoxRef.current.scrollHeight + 300,
+        behavior: 'smooth',
+      });
+    }
+  }, [messages, selectedConversation]);
+
+  useEffect(() => {
+    if (!token) setShowFog(false);
+  }, [token]);
+
+  useEffect(() => {
+    if (!error) return;
+    const t = setTimeout(() => setError(''), 4500);
+    return () => clearTimeout(t);
+  }, [error]);
+
+  // ---- API Logic ----
+  const fetchHistory = async (authToken) => {
+    try {
+      const res = await fetch(`${API_BASE}/conversations`, {
+        headers: { Authorization: `Bearer ${authToken}` },
+      });
+      if (res.status === 401) {
+        setToken('');
+        localStorage.removeItem('token');
+        return;
+      }
+      if (res.ok) {
+        const data = await res.json();
+        setConversations(data);
+      }
+    } catch {
+      setError('Could not fetch chat history.');
+    }
+  };
+
+  const handleLogin = async () => {
+    setShowFog(true);
+    setIsPending(true);
+    setTimeout(async () => {
+      try {
+        const res = await fetch(`${API_BASE}/login`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+          body: new URLSearchParams({
+            username: email.trim(),
+            password,
+            grant_type: 'password',
+          }),
+        });
+        const data = await res.json();
+        if (data.access_token) {
+          setToken(data.access_token);
+          localStorage.setItem('token', data.access_token);
+          await fetchHistory(data.access_token);
+          setTimeout(() => setShowFog(false), 800);
+          setTimeout(() => promptInputRef.current?.focus(), 1000);
+        } else {
+          setShowFog(false);
+          setError('❌ Login failed! Check your credentials.');
+        }
+      } catch {
+        setShowFog(false);
+        setError('Error during login.');
+        setToken('');
+        localStorage.removeItem('token');
+      } finally {
+        setIsPending(false);
+      }
+    }, 400);
+  };
+
+  const handleSignup = async () => {
+    if (!name.trim() || !email.trim() || !password) {
+      setError('Please fill in all signup fields.');
+      return;
+    }
+    setIsPending(true);
+    try {
+      const res = await fetch(`${API_BASE}/signup`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: name.trim(), email: email.trim(), password }),
+      });
+      const data = await res.json();
+      if (data.msg === 'User registered!') {
+        setError('✅ Signup successful! Please login.');
+        setIsLoginMode(true);
+      } else {
+        setError('❌ Signup failed:' + data.detail);
+      }
+    } catch {
+      setError('Error during signup.');
+    } finally {
+      setIsPending(false);
+    }
+  };
+
+  const handleGenerate = async () => {
+    if (!token) return setError('🔒 Please log in first.');
+    if (!prompt.trim()) return setError('💡 Please enter a prompt.');
+    setIsPending(true);
+    setMessages((prev) => [
+      ...prev,
+      { role: 'user', content: prompt },
+      { role: 'assistant', content: '...' }, // Typing indicator
+    ]);
+    try {
+      const res = await fetch(`${API_BASE}/generate-text`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ prompt: prompt.trim(), persona }),
+      });
+      if (res.status === 401) {
+        setToken('');
+        localStorage.removeItem('token');
+        setError('Session expired. Please login again.');
+        setMessages([]);
+        return;
+      }
+      if (!res.ok) {
+        const errText = await res.text();
+        setError(`❌ Failed: ${res.status} ${res.statusText}\n${errText}`);
+        setMessages((prev) => prev.slice(0, -1));
+        return;
+      }
+      const data = await res.json();
+      setMessages((prev) =>
+        prev
+          .slice(0, -1)
+          .concat({ role: 'assistant', content: data.response })
+      );
+      setPrompt('');
+      setTimeout(
+        () =>
+          chatBoxRef.current?.scrollTo({
+            top: chatBoxRef.current.scrollHeight + 200,
+            behavior: 'smooth',
+          }),
+        185
+      );
+    } catch (err) {
+      setError('❌ Error generating response: ' + (err?.message || String(err)));
+      setMessages((prev) => prev.slice(0, -1));
+    } finally {
+      setIsPending(false);
+    }
+  };
+
+  const handleLogout = async () => {
+    setShowFog(true);
+    setIsPending(true);
+    setTimeout(async () => {
+      if (
+        messages.length > 0 &&
+        window.confirm('🧠 Save your conversation history?')
+      ) {
+        try {
+          await fetch(`${API_BASE}/save-conversation`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${token}`,
+            },
+            body: JSON.stringify({
+              messages,
+              title: 'Session on ' + new Date().toLocaleString(),
+            }),
+          });
+        } catch {}
+      }
+      try {
+        await fetch(`${API_BASE}/logout`, {
+          method: 'GET',
+          credentials: 'include',
+        });
+      } catch {}
+      localStorage.removeItem('token');
+      setToken('');
+      setPrompt('');
+      setMessages([]);
+      setConversations([]);
+      setSelectedConversation(null);
+      setShowFog(false);
+      setIsPending(false);
+    }, 600);
+  };
+
+  const loadConversation = (conv) => {
+    setSelectedConversation(conv.id);
+    setMessages(conv.messages);
+    setShowHistory(false);
+  };
+
+  // ------------------------------------- APP LAYOUT -------------------------------------
+  return (
+    <div
+      className="min-h-screen w-full flex flex-col relative bg-gradient-to-b from-[#18203b] to-[#231933] via-[#13182f] text-white overflow-x-hidden"
+      style={{
+        fontFamily: 'Inter, Space Grotesk, JetBrains Mono, sans-serif',
+        backgroundAttachment: 'fixed',
+      }}
+    >
+      <GelCursor />
+      <FoggyOverlay show={showFog} type={!token ? 'logout' : 'login'} />
+
+      <BrutalLandingHero />
+      <SectionDivider />
+
+      <MainFunctionality />
+      <SectionDivider />
+
+      {/* =================== Chat Section (Brutally Central) =================== */}
+      <motion.main
+      id="aichat"  
+  initial={{ opacity: 0, scale: 0.97, y: 32 }}
+  whileInView={{ opacity: 1, scale: 1, y: 0 }}
+  viewport={{ once: false }}
+  transition={{
+    type: 'spring',
+    duration: 1.1,
+    delay: 0.15,
+    stiffness: 110,
+        }}
+        className="w-full max-w-[44rem] mx-auto rounded-[2.1rem] shadow-lg border border-[#e6cbfa] dark:border-[#263664] px-3 md:px-8 py-7 bg-gradient-to-br from-[#262263f0] via-[#192239f7] to-[#2b1546e7] backdrop-blur-2xl relative mb-10"
+        role="main"
+        aria-live="polite"
+      >
+        <div className="flex flex-col gap-6 mb-7">
+          <h2 className="font-black text-2xl md:text-3xl text-center bg-gradient-to-r from-[#db5afb] via-[#5e8efd] to-[#75e4b6] bg-clip-text text-transparent">
+            💬 AI Chat Interface
+          </h2>
+          <div className="text-center text-[#c9d0fd] max-w-xl mx-auto mb-2">
+            Login to chat with AI, pick personas, save/load your sessions.
+          </div>
+        </div>
+        {!token ? (
+          // ------------------ AUTH UI ------------------
+          <section className="space-y-7 pt-2" aria-label="Authentication form">
+            {!isLoginMode && (
+              <label htmlFor="signupName" className="block font-medium text-[#db5afb]">
+                Full Name
+                <input
+                  type="text"
+                  id="signupName"
+                  className="w-full px-4 py-3 rounded-xl bg-[#fff]/10 border border-[#d4cbfd39] text-[1.10rem] font-medium focus:ring-2 focus:ring-[#94caff] outline-none transition"
+                  value={name}
+                  onChange={e => setName(e.target.value)}
+                  autoComplete="name"
+                  disabled={isPending}
+                  required
+                />
+              </label>
+            )}
+            <label htmlFor="email" className="block font-medium text-[#db5afb]">
+              Email
+              <input
+                type="email"
+                id="email"
+                className="w-full px-4 py-3 rounded-xl bg-[#fff]/10 border border-[#d4cbfd39] text-[1.10rem] font-medium focus:ring-2 focus:ring-[#94caff] outline-none transition"
+                value={email}
+                onChange={e => setEmail(e.target.value)}
+                autoComplete="email"
+                disabled={isPending}
+                required
+              />
+            </label>
+            <label htmlFor="password" className="block font-medium text-[#db5afb]">
+              Password
+              <input
+                type="password"
+                id="password"
+                className="w-full px-4 py-3 rounded-xl bg-[#fff]/10 border border-[#d4cbfd39] text-[1.10rem] font-medium focus:ring-2 focus:ring-[#94caff] outline-none transition"
+                value={password}
+                onChange={e => setPassword(e.target.value)}
+                autoComplete={isLoginMode ? 'current-password' : 'new-password'}
+                disabled={isPending}
+                required
+              />
+            </label>
+            <button
+              onClick={isLoginMode ? handleLogin : handleSignup}
+              className="w-full bg-gradient-to-tr from-[#db5afb] via-[#5e8efd] to-[#75e4b6] hover:brightness-105 text-white font-bold rounded-xl py-3 text-[1.18rem] transition active:scale-98 active:opacity-80 duration-200 shadow-lg"
+              aria-label={isLoginMode ? 'Login' : 'Sign Up'}
+              type="button"
+              disabled={isPending}
+            >
+              {isPending ? '⏳' : isLoginMode ? 'Login' : 'Sign Up'}
+            </button>
+            <p className="text-sm text-center text-[#a785bb] dark:text-[#a7adc1] font-medium">
+              {isLoginMode ? 'New user? ' : 'Already have an account? '}
+              <button
+                type="button"
+                className="underline text-[#db5afb] hover:text-[#5e8efd] font-bold cursor-pointer"
+                onClick={() => setIsLoginMode(!isLoginMode)}
+                aria-label={isLoginMode ? 'Switch to Sign Up' : 'Switch to Login'}
+              >
+                {isLoginMode ? 'Sign up' : 'Login'}
+              </button>
+            </p>
+          </section>
+        ) : (
+          // --------------- CHAT UI ---------------
+          <section className="flex flex-col min-h-[410px] sm:min-h-[460px] relative pt-1" aria-label="Chat interface">
+            <AnimatePresence>
+              {showHistory && (
+                <motion.div
+                  initial={{ opacity: 0, scale: 0.97 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  exit={{ opacity: 0, scale: 0.97 }}
+                  className="fixed inset-0 bg-[#23213a45] dark:bg-[#181827e6] flex justify-center items-center z-20"
+                  onClick={() => setShowHistory(false)}
+                  style={{ cursor: 'pointer' }}
+                  role="dialog"
+                  aria-modal="true"
+                  aria-labelledby="chat-history-title"
+                  tabIndex={-1}
+                >
+                  <motion.div
+                    initial={{ y: 42, opacity: 0 }}
+                    animate={{ y: 0, opacity: 1 }}
+                    exit={{ y: 42, opacity: 0 }}
+                    transition={{
+                      type: 'spring',
+                      damping: 18,
+                      stiffness: 160,
+                    }}
+                    className="bg-[#19172b] dark:bg-[#10101b] rounded-2xl px-7 py-7 w-[90vw] sm:w-[380px] max-h-[330px] shadow-2xl border border-[#e1cafe] dark:border-[#262639] flex flex-col"
+                    onClick={e => e.stopPropagation()}
+                  >
+                    <div className="flex items-center mb-4 justify-between">
+                      <h2 id="chat-history-title" className="font-bold text-base text-[#e9aefd] dark:text-white">
+                        Your Chats
+                      </h2>
+                      <button
+                        className="text-3xl font-bold text-[#d9c6fc] hover:text-[#db5afb]"
+                        onClick={() => setShowHistory(false)}
+                        aria-label="Close chat history"
+                      >
+                        ×
+                      </button>
+                    </div>
+                    <div className="overflow-auto max-h-[210px] custom-scroll space-y-1 pr-2" role="list">
+                      {conversations.length === 0 ? (
+                        <div className="text-xs text-[#a99bc7] mt-8">
+                          No past chats.
+                        </div>
+                      ) : (
+                        conversations.map((conv) => (
+                          <div
+                            key={conv.id}
+                            onClick={() => loadConversation(conv)}
+                            tabIndex={0}
+                            role="button"
+                            aria-pressed={selectedConversation === conv.id}
+                            className={`cursor-pointer px-3 py-2 rounded-lg font-semibold transition
+                                border border-transparent hover:bg-[#e8dbfc33] dark:hover:bg-[#23243b] font-plex
+                                ${
+                                  selectedConversation === conv.id
+                                    ? 'border-[#db5afb] bg-[#efd9ffa6]'
+                                    : ''
+                                }
+                                text-xs text-[#e5ccfa] dark:text-neutral-100`}
+                            onKeyDown={e => {
+                              if (
+                                e.key === 'Enter' ||
+                                e.key === ' '
+                              ) {
+                                e.preventDefault();
+                                loadConversation(conv);
+                              }
+                            }}
+                          >
+                            {conv.title}
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  </motion.div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+            <div className="flex items-center justify-between mb-3 z-20">
+              <button
+                onClick={() => setShowHistory(!showHistory)}
+                className="rounded-full px-3 py-2 bg-[#ede7ff44] dark:bg-[#2d2951d9] border border-[#e7e5f7] dark:border-[#4b2991] text-[#db5afb] font-bold hover:bg-[#694ceb36] hover:text-[#5e8efd] text-md transition"
+                title={showHistory ? 'Hide History' : 'Show History'}
+                aria-pressed={showHistory}
+                type="button"
+              >
+                {showHistory ? '📂' : '📁'}
+              </button>
+              <button
+                onClick={handleLogout}
+                className="ml-2 underline text-[#fa92f7] hover:text-[#51dbfa] text-sm font-bold"
+                title="Logout"
+                tabIndex={0}
+                type="button"
+              >
+                Logout
+              </button>
+            </div>
+            <div
+              ref={chatBoxRef}
+              className="flex-1 min-h-0 overflow-y-auto px-1 pb-1 pt-1 rounded-xl border border-[#e7d9fa] dark:border-[#31334e60] custom-scroll bg-[#181541f2] dark:bg-[#181926]"
+              role="list"
+              aria-live="polite"
+              aria-label="Chat messages"
+              tabIndex={-1}
+            >
+              {messages.length === 0 ? (
+                <motion.div
+                  initial={{ opacity: 0, y: 25 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 1.02, type: 'spring' }}
+                  className="text-center text-[16px] mt-10 text-[#b6a1ff] dark:text-[#a1d4fa] select-none font-plex"
+                >
+                  Start a new conversation...
+                </motion.div>
+              ) : (
+                messages.map((msg, i) => (
+                  <MessageBubble msg={msg} key={i} i={i} />
+                ))
+              )}
+            </div>
+            <SectionDivider />
+            <form
+              className="flex flex-col sm:flex-row gap-2 mt-2 border border-[#decafe] dark:border-[#20264e] bg-[#1b1643] dark:bg-[#191c21] rounded-2xl px-3 py-3 ring-1 ring-[#6939eb10]"
+              onSubmit={e => {
+                e.preventDefault();
+                handleGenerate();
+              }}
+              aria-label="Prompt input form"
+            >
+              <label htmlFor="persona-select" className="sr-only">
+                Select chat persona
+              </label>
+              <select
+                id="persona-select"
+                value={persona}
+                onChange={e => setPersona(e.target.value)}
+                className="rounded-lg px-3 py-2 text-sm border border-[#f2cafe] dark:border-[#632fc9] bg-[#ede9fe44] dark:bg-[#22243a] text-[#db5afb] dark:text-[#5e8efd] font-semibold font-plex transition"
+                style={{ fontFamily: 'Space Grotesk' }}
+              >
+                <option value="friendly">🤗 Friendly</option>
+                <option value="sarcastic">😏 Sarcastic</option>
+                <option value="dev">💻 DevGPT</option>
+                <option value="translator">🌐 Translator</option>
+              </select>
+              <label htmlFor="prompt-input" className="sr-only">
+                Enter prompt
+              </label>
+              <input
+                ref={promptInputRef}
+                id="prompt-input"
+                type="text"
+                placeholder="Ask me anything..."
+                maxLength={222}
+                className="flex-grow px-4 py-2 rounded-xl text-base border border-[#d0bcff] dark:border-[#242e5e] bg-[#fff]/5 dark:bg-[#181926] focus:ring-2 focus:ring-[#db5afb] outline-none font-[JetBrains Mono] transition placeholder-[#aaa0ce] text-[#eec1fb]"
+                value={prompt}
+                onChange={e => setPrompt(e.target.value)}
+                onKeyDown={e => {
+                  if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    handleGenerate();
+                  }
+                }}
+                autoComplete="off"
+                aria-label="Prompt input"
+                spellCheck={false}
+                disabled={isPending}
+              />
+              <motion.button
+                type="submit"
+                whileTap={{ scale: 0.96 }}
+                whileHover={{ scale: 1.11, boxShadow: '0 0 0 8px #694ceb2b' }}
+                className="bg-gradient-to-tr from-[#db5afb] via-[#5e8efd] to-[#75e4b6] hover:brightness-110 text-white font-black text-lg px-8 py-2 rounded-xl active:scale-98 transition font-plex focus:outline-none focus:ring-2 focus:ring-[#db5afb] shadow-md"
+                aria-label="Send prompt"
+                disabled={isPending}
+              >
+                ➤
+              </motion.button>
+            </form>
+          </section>
+        )}
+
+        <AnimatePresence>
+          {error && <Toast message={error} onDismiss={() => setError('')} />}
+        </AnimatePresence>
+      </motion.main>
+      <SectionDivider />
+
+      {/* =============== TECH STACK GRID =============== */}
+      <TechStackGrid />
+      <SectionDivider />
+
+      {/* =============== FEATURES GRID =============== */}
+      <FeaturesSection />
+      <SectionDivider />
+      <Footer />
+
+      {/* SVG BG global */}
+      <div className="absolute inset-0 pointer-events-none -z-10" aria-hidden="true">
+        <svg
+          width="100%"
+          height="100%"
+          viewBox="0 0 1500 900"
+          fill="none"
+          className="hidden md:block absolute top-0 left-0 opacity-14"
+        >
+          <defs>
+            <radialGradient id="meshGlow3" cx="35%" cy="35%" r="65%">
+              <stop stopColor="#7fb3fb" offset="0%" />
+              <stop stopColor="#db5afb" offset="43%" />
+              <stop stopColor="#75e4b6" offset="96%" />
+            </radialGradient>
+          </defs>
+          <ellipse cx="800" cy="400" rx="600" ry="310" fill="url(#meshGlow3)" opacity="0.3" />
+          <rect
+            x="80"
+            y="80"
+            width="1340"
+            height="740"
+            rx="48"
+            stroke="url(#meshGlow3)"
+            strokeDasharray="12 18"
+            strokeWidth="1.4"
+            opacity="0.54"
+          />
+        </svg>
+      </div>
+      {/* Tailwind custom scrollbar and font helpers */}
+      <style>{`
+        .custom-scroll {
+          scrollbar-width: thin;
+          scrollbar-color: #db5afb #1c152a;
+        }
+        .custom-scroll::-webkit-scrollbar { width: 8px; background: transparent; }
+        .custom-scroll::-webkit-scrollbar-thumb { background: #db5afb55; border-radius: 11px; }
+        @media (prefers-color-scheme: dark) {
+          .custom-scroll::-webkit-scrollbar-thumb { background: #c3fbdc55; }
+        }
+        .font-plex { font-family: 'Inter', 'Space Grotesk', 'JetBrains Mono', ui-sans-serif, system-ui, sans-serif; }
+      `}</style>
+    </div>
+  );
+}
